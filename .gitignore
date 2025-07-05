@@ -1,4 +1,6 @@
+# ====================
 # Logs
+# ====================
 logs
 *.log
 npm-debug.log*
@@ -7,26 +9,51 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
-# Dependencies
+# ====================
+# Dependency Folders
+# ====================
 node_modules/
+frontend/node_modules_old/  # Optional: backup or legacy dependencies
 
-# Production
+# ====================
+# Build Outputs
+# ====================
 /dist
 /build
+/dist-ssr
 
-# Misc
+# ====================
+# System Files & Misc
+# ====================
 .DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# ====================
+# Environment Variables
+# ====================
 .env
 .env.local
 .env.development.local
 .env.test.local
 .env.production.local
 
-# Editor directories and files
+# ====================
+# Editor Settings
+# ====================
 .vscode/
+.vscode/*     # Optional: keep extensions.json if needed
 .idea/
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
-*.sw?
+
+# ====================
+# Native Binaries (e.g., SWC)
+# ====================
+*.node
+
+# ====================
+# MongoDB or Local Database Files
+# ====================
+super_key/data/
