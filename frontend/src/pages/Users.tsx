@@ -33,7 +33,6 @@ export default function Users() {
   const [users, setUsers] = useState<User[]>([]);
   const [filteredUsers, setFilteredUsers] = useState<User[]>([]);
   const [activeRoleFilter, setActiveRoleFilter] = useState<string>('super-distributor');
-  const [showReceiptId, setShowReceiptId] = useState<string | null>(null); // State to hold the UID of the user whose receipt ID is shown
   const [newUser, setNewUser] = useState({
     name: '',
     email: '',
@@ -135,12 +134,6 @@ export default function Users() {
     }
   };
 
-
-
-  const handleToggleReceiptId = (uid: string) => {
-    setShowReceiptId(showReceiptId === uid ? null : uid);
-  };
-
   return (
     <div className="container mx-auto p-6">
       <h1 className="text-3xl font-bold mb-6">User Management</h1>
@@ -196,30 +189,15 @@ export default function Users() {
                   {filteredUsers.map((user) => (
                     <TableRow key={user.uid}>
                       <TableCell>
-                        {user.role === 'super-distributor' ? (
-                          <span
-                            className="cursor-pointer text-blue-600 hover:underline"
-                            onClick={() => handleToggleReceiptId(user.uid)}
-                          >
-                            {user.name}
-                          </span>
-                        ) : (
-                          user.name
-                        )}
+                        {user.name}
                       </TableCell>
                       <TableCell>{user.email}</TableCell>
                       <TableCell>{user.phone}</TableCell>
                       <TableCell>{user.role}</TableCell>
-                      <TableCell>
-                        {user.createdAt ? new Date(user.createdAt).toLocaleString('en-US', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'N/A'}
-                      </TableCell>
+                      <TableCell>{new Date(user.createdAt).toLocaleString()}</TableCell>
                       {activeRoleFilter === 'super-distributor' && (
                         <TableCell>
-                          {showReceiptId === user.uid ? (
-                            <span className="font-mono text-sm text-gray-700">{user.receiptId || 'REC-' + user.uid.substring(0, 8).toUpperCase()}</span>
-                          ) : (
-                            <span className="text-gray-400">Click name to reveal</span>
-                          )}
+                          {user.receiptId === 'Click name to reveal' ? 'N/A' : user.receiptId}
                         </TableCell>
                       )}
                     </TableRow>
@@ -230,45 +208,103 @@ export default function Users() {
           </Card>
         </TabsContent>
 
-        {user?.role === 'super_admin' && (
-          <TabsContent value="add-user">
-            <Card>
-              <CardHeader>
-                <CardTitle>Add New User</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <form onSubmit={handleAddUser}>
-                  <div className="grid w-full items-center gap-4">
-                    <div className="flex flex-col space-y-1.5">
-                      <Label htmlFor="name">Name</Label>
-                      <Input id="name" placeholder="Name of the user" value={newUser.name} onChange={(e) => setNewUser({...newUser, name: e.target.value})} />
-                    </div>
-                    <div className="flex flex-col space-y-1.5">
-                      <Label htmlFor="email">Email</Label>
-                      <Input id="email" placeholder="Email of the user" value={newUser.email} onChange={(e) => setNewUser({...newUser, email: e.target.value})} />
-                    </div>
-                    <div className="flex flex-col space-y-1.5">
-                      <Label htmlFor="phone">Phone</Label>
-                      <Input id="phone" placeholder="Phone number" value={newUser.phone} onChange={(e) => setNewUser({...newUser, phone: e.target.value})} />
-                    </div>
-                    <div className="flex flex-col space-y-1.5">
-                      <Label htmlFor="password">Password</Label>
-                      <Input id="password" type="password" placeholder="Password" value={newUser.password} onChange={(e) => setNewUser({...newUser, password: e.target.value})} />
-                    </div>
-                    <div className="flex flex-col space-y-1.5">
-                      <Label htmlFor="role">Role</Label>
-                      <Input id="role" placeholder="Role (e.g., super_distributor, distributor, retailer)" value={newUser.role} onChange={(e) => setNewUser({...newUser, role: e.target.value})} />
-                    </div>
-                    <Button type="submit" disabled={isLoading}>
-                       {isLoading ? 'Adding...' : 'Add User'}
-                     </Button>
+        <TabsContent value="add-user">
+          <Card>
+            <CardHeader>
+              <CardTitle>Add New User</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={handleAddUser} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="name">Name</Label>
+                  <Input
+                    id="name"
+                    type="text"
+                    value={newUser.name}
+                    onChange={(e) => setNewUser({ ...newUser, name: e.target.value })}
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="email">Email</Label>
+                  <Input
+                    id="email"
+                    type="email"
+                    value={newUser.email}
+                    onChange={(e) => setNewUser({ ...newUser, email: e.target.value })}
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="phone">Phone</Label>
+                  <Input
+                    id="phone"
+                    type="text"
+                    value={newUser.phone}
+                    onChange={(e) => setNewUser({ ...newUser, phone: e.target.value })}
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="password">Password</Label>
+                  <Input
+                    id="password"
+                    type="password"
+                    value={newUser.password}
+                    onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="role">Role</Label>
+                  <select
+                    id="role"
+                    value={newUser.role}
+                    onChange={(e) => setNewUser({ ...newUser, role: e.target.value })}
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                    required
+                  >
+                    <option value="">Select Role</option>
+                    {user?.role === 'super_admin' && (
+                      <option value="super-distributor">Super Distributor</option>
+                    )}
+                    {(user?.role === 'super_admin' || user?.role === 'super_distributor') && (
+                      <option value="distributor">Distributor</option>
+                    )}
+                    {(user?.role === 'super_admin' || user?.role === 'super_distributor' || user?.role === 'distributor') && (
+                      <option value="retailer">Retailer</option>
+                    )}
+                  </select>
+                </div>
+                {newUser.role === 'retailer' && (
+                  <div className="space-y-2">
+                    <Label htmlFor="shopName">Shop Name</Label>
+                    <Input
+                      id="shopName"
+                      type="text"
+                      value={newUser.shopName}
+                      onChange={(e) => setNewUser({ ...newUser, shopName: e.target.value })}
+                    />
                   </div>
-                </form>
-              </CardContent>
-            </Card>
-          </TabsContent>
-        )}
-
+                )}
+                {newUser.role === 'retailer' && (
+                  <div className="space-y-2">
+                    <Label htmlFor="paymentQr">Payment QR</Label>
+                    <Input
+                      id="paymentQr"
+                      type="text"
+                      value={newUser.paymentQr}
+                      onChange={(e) => setNewUser({ ...newUser, paymentQr: e.target.value })}
+                    />
+                  </div>
+                )}
+                <Button type="submit" disabled={isLoading}>
+                  {isLoading ? 'Adding...' : 'Add User'}
+                </Button>
+              </form>
+            </CardContent>
+          </Card>
+        </TabsContent>
       </Tabs>
     </div>
   );

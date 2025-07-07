@@ -316,9 +316,40 @@ async function provisionKey(req, res) {
   }
 }
 
+async function getUserKeys(req, res) {
+  try {
+    const { userId } = req.params;
+
+    if (!userId) {
+      return res.status(400).json({ error: 'User ID is required' });
+    }
+
+    // Ensure the requesting user is a super_admin or the user themselves
+    if (req.user.role !== 'super_admin' && req.user.uid !== userId) {
+      return res.status(403).json({ error: 'Unauthorized: You can only view your own keys unless you are a super admin.' });
+    }
+
+    const snapshot = await db.collection('keys')
+      .where('assignedTo', '==', userId)
+      .where('status', 'in', ['unassigned', 'credited'])
+      .get();
+
+    const keys = [];
+    snapshot.forEach(doc => {
+      keys.push({ id: doc.id, ...doc.data() });
+    });
+
+    res.json({ keys });
+  } catch (error) {
+    console.error('Error fetching user keys:', error);
+    res.status(500).json({ error: error.message });
+  }
+}
+
 module.exports = {
   createKeys,
   transferKeys,
   revokeKeys,
-  provisionKey
+  provisionKey,
+  getUserKeys
 };

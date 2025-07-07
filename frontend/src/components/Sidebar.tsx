@@ -37,13 +37,13 @@ export const Sidebar = ({ collapsed, onToggle }: SidebarProps) => {
     ];
 
     switch (role) {
-      case 'super-admin':
+      case 'super_admin':
+        // Remove Dashboard for super_admin
         return [
-          ...baseItems,
           { icon: Key, label: 'Key Assignment', path: '/keys' },
           { icon: Users, label: 'User Management', path: '/users' },
         ];
-      case 'super-distributor':
+      case 'super_distributor':
       case 'distributor':
         return [
           ...baseItems,

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { keysApi, usersApi } from '@/lib/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
@@ -17,6 +17,7 @@ interface User {
   _id: string;
   name: string;
   receiptId?: string; // Add optional receiptId
+  parentId?: string; // Add parentId for super_distributor
 }
 
 export default function Keys() {
@@ -26,7 +27,7 @@ export default function Keys() {
   const [validity, setValidity] = useState(12);
   const [transferUserId, setTransferUserId] = useState('');
   const [transferCount, setTransferCount] = useState(1);
-  const [superDistributors, setSuperDistributors] = useState<User[]>([]);
+  const [recipients, setRecipients] = useState<User[]>([]);
   const [open, setOpen] = useState(false);
   const [value, setValue] = useState('');
   const [selectedRecipientReceiptId, setSelectedRecipientReceiptId] = useState<string | undefined>(undefined);
@@ -34,35 +35,56 @@ export default function Keys() {
   const [isRevokeModalOpen, setIsRevokeModalOpen] = useState(false);
   const [selectedUserKeysCount, setSelectedUserKeysCount] = useState<number | null>(null);
 
+  // Move fetchRecipients and fetchAvailableKeys to main component scope so they are available everywhere
+  const fetchRecipients = async (role: string) => {
+    try {
+      let targetRole = '';
+      if (role === 'super_admin') {
+        targetRole = 'super_distributor';
+      } else if (role === 'super_distributor') {
+        targetRole = 'distributor';
+      } else if (role === 'distributor') {
+        targetRole = 'retailer';
+      }
+
+      if (targetRole) {
+        const response = await usersApi.getUsersByRole(targetRole);
+        setRecipients(response.data.users);
+      } else {
+        setRecipients([]);
+      }
+    } catch (error) {
+      toast.error('Failed to fetch recipients');
+      console.error('Fetch recipients error:', error);
+    }
+  };
+
+  const fetchAvailableKeys = async () => {
+    try {
+      const response = await keysApi.getMyKeys();
+      setAvailableKeys(response.data.keys.length);
+    } catch (error) {
+      toast.error('Failed to fetch available keys');
+      console.error('Fetch available keys error:', error);
+    }
+  };
+
+  // Move fetchRecipients and fetchAvailableKeys to useRef so they can be called after transfer
+  const fetchRecipientsRef = useRef(fetchRecipients);
+  const fetchAvailableKeysRef = useRef(fetchAvailableKeys);
+
   useEffect(() => {
-    const fetchSuperDistributors = async () => {
-      try {
-        const response = await usersApi.getUsersByRole('super-distributor');
-        console.log('API response for super distributors:', response.data.users);
-        setSuperDistributors(response.data.users);
-        console.log('Super distributors after setting state:', response.data.users);
-      } catch (error) {
-        toast.error('Failed to fetch super distributors');
-        console.error('Fetch super distributors error:', error);
-      }
-    };
+    fetchRecipientsRef.current = fetchRecipients;
+    fetchAvailableKeysRef.current = fetchAvailableKeys;
+  }, [fetchRecipients, fetchAvailableKeys]);
 
-    const fetchAvailableKeys = async () => {
-      try {
-        const response = await keysApi.getMyKeys();
-        setAvailableKeys(response.data.keys.length);
-      } catch (error) {
-        toast.error('Failed to fetch available keys');
-        console.error('Fetch available keys error:', error);
-      }
-    };
-
+  useEffect(() => {
     console.log('Current user role:', user?.role);
-    if (user?.role === 'super_admin') {
-      fetchSuperDistributors();
+    if (user?.role) {
+      fetchRecipients(user.role);
     }
     fetchAvailableKeys();
-    console.log('Super distributors state:', superDistributors);
+    console.log('Recipients state:', recipients);
   }, [user]);
 
   const handleCreateKeys = async (e: React.FormEvent) => {
@@ -82,6 +104,7 @@ export default function Keys() {
   };
 
   const fetchUserKeysCount = async (userId: string) => {
+    console.log('Fetching keys for userId:', userId);
     try {
       const response = await keysApi.getUserKeys(userId);
       setSelectedUserKeysCount(response.data.keys.length);
@@ -107,21 +130,38 @@ export default function Keys() {
 
   const handleTransferKeys = async (e: React.FormEvent) => {
     e.preventDefault();
+    // Add validation for recipient and count
+    if (!transferUserId) {
+      toast.error('Please select a recipient.');
+      return;
+    }
+    if (!Number.isInteger(transferCount) || transferCount <= 0) {
+      toast.error('Please enter a valid number of keys to transfer.');
+      return;
+    }
     if (availableKeys !== null && transferCount > availableKeys) {
       toast.error(`You only have ${availableKeys} keys left. You can transfer a maximum of ${availableKeys} keys.`);
       return;
     }
     setIsLoading(true);
     try {
-      await keysApi.transfer(transferUserId, transferCount);
-      const recipient = superDistributors.find(sd => sd._id === transferUserId);
-      toast.success(`Successfully transferred ${transferCount} keys to ${recipient?.name || 'unknown user'}`);
+      // Log payload for debugging
+      console.log('Transferring keys:', { toUserId: transferUserId, count: transferCount });
+      const response = await keysApi.transfer(transferUserId, transferCount);
+      const recipient = recipients.find(r => r._id === transferUserId);
+      // Show only a single, clear toast
+      toast.success('Keys transferred successfully!');
       setTransferUserId('');
       setTransferCount(1);
       // Optionally display receiptId after successful transfer
       if (recipient?.receiptId) {
         toast.info(`Recipient Receipt ID: ${recipient.receiptId}`);
       }
+      // Refresh available keys and recipients after transfer
+      if (user?.role) {
+        fetchRecipients(user.role);
+      }
+      fetchAvailableKeys();
     } catch (error) {
       toast.error('Failed to transfer keys');
       console.error('Key transfer error:', error);
@@ -169,9 +209,6 @@ export default function Keys() {
                       required
                     />
                   </div>
-                {selectedRecipientReceiptId && (
-                  <p className="text-sm text-gray-500 mt-2">Receipt ID: {selectedRecipientReceiptId}</p>
-                )}
                   
                   <div className="space-y-2">
                     <Label htmlFor="validity">Validity (months)</Label>
@@ -215,34 +252,35 @@ export default function Keys() {
                         className="w-full justify-between"
                       >
                         {value
-                          ? superDistributors.find((sd) => sd._id === value)?.name + ' (' + superDistributors.find((sd) => sd._id === value)?._id + ')'
-                          : "Select super distributor..."}
+                          ? recipients.find((r) => r.name === value)?.name + ' (' + recipients.find((r) => r.name === value)?._id + ')'
+                          : "Select recipient..."}
                         <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                       </Button>
                     </PopoverTrigger>
                     <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
                       <Command>
-                        <CommandInput placeholder="Search super distributor..." />
-                        <CommandEmpty>No super distributor found.</CommandEmpty>
+                        <CommandInput placeholder="Search recipient..." />
+                        <CommandEmpty>No recipients found.</CommandEmpty>
                         <CommandList>
                           <CommandGroup>
-                            {superDistributors.map((sd) => (
+                            {recipients.map((r) => (
                               <CommandItem
-                                key={sd._id}
-                                value={sd.name}
+                                key={r._id}
+                                value={r.name}
                                 onSelect={() => {
-                                  setValue(sd._id);
-                                  setTransferUserId(sd._id);
+                                  setValue(r.name);
+                                  setTransferUserId(r._id);
+                                  setSelectedRecipientReceiptId(r.receiptId); // Set receiptId here
                                   setOpen(false);
                                 }}
                               >
                                 <Check
                                   className={cn(
                                     'mr-2 h-4 w-4',
-                                    sd._id === value ? 'opacity-100' : 'opacity-0'
+                                    value === r.name ? 'opacity-100' : 'opacity-0'
                                   )}
                                 />
-                                {sd.name} ({sd._id})
+                                {r.name} {r.receiptId && `(${r.receiptId})`} {r.parentId && <span className="text-xs text-gray-400 ml-2">Parent: {r.parentId}</span>}
                               </CommandItem>
                             ))}
                           </CommandGroup>
@@ -265,6 +303,9 @@ export default function Keys() {
                 <Button type="submit" disabled={isLoading}>
                   {isLoading ? 'Transferring...' : 'Transfer Keys'}
                 </Button>
+                {selectedRecipientReceiptId && (
+                  <p className="text-sm text-gray-500 mt-2">Receipt ID: {selectedRecipientReceiptId}</p>
+                )}
               </form>
             </CardContent>
           </Card>
@@ -278,12 +319,13 @@ export default function Keys() {
               </CardHeader>
               <CardContent>
                 <RevokeKeyModal
-        isOpen={isRevokeModalOpen}
-        onClose={() => setIsRevokeModalOpen(false)}
-        onRevoke={handleRevokeKeys}
-        onUserSelect={fetchUserKeysCount} // Pass the function to fetch user keys
-        selectedUserKeysCount={selectedUserKeysCount} // Pass the selected user's key count
-      />
+                  isOpen={isRevokeModalOpen}
+                  onClose={() => setIsRevokeModalOpen(false)}
+                  onRevoke={handleRevokeKeys}
+                  onUserSelect={fetchUserKeysCount}
+                  selectedUserKeysCount={selectedUserKeysCount}
+                  users={recipients} // Pass the recipients to the modal
+                />
               </CardContent>
             </Card>
           </TabsContent>

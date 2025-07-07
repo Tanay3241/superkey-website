@@ -3,7 +3,7 @@ const router = express.Router();
 const { db } = require('../config/firebase');
 const { requireRole, authenticateUser } = require('../middleware/authMiddleware');
 
-const { createKeys, transferKeys, revokeKeys, provisionKey } = require('../controllers/keysController');
+const { createKeys, transferKeys, revokeKeys, provisionKey, getUserKeys } = require('../controllers/keysController');
 
 
 // 1. Generate Keys (Super Admin only)
@@ -37,5 +37,8 @@ router.get('/my-keys', authenticateUser, async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+
+// 7. Get Keys Assigned to a Specific User (for super admin to view other users' keys)
+router.get('/user/:userId', authenticateUser, requireRole(['super_admin']), getUserKeys);
 
 module.exports = { router };

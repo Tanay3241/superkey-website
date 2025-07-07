@@ -99,6 +99,7 @@ async function createDistributor(req, res) {
       name,
       phone,
       role: "distributor",
+      receiptId: 'REC-' + userRecord.uid.substring(0, 8).toUpperCase(), // Generate a simple receipt ID
       parentId: superDistributorId,
       hierarchy: {
         superAdmin: superDistributorDoc.data().hierarchy.superAdmin,
@@ -150,6 +151,7 @@ async function createRetailer(req, res) {
       shopName,
       paymentQr,
       role: "retailer",
+      receiptId: 'REC-' + userRecord.uid.substring(0, 8).toUpperCase(), // Generate a simple receipt ID
       parentId: distributorId,
       hierarchy: {
         superAdmin: distributorDoc.data().hierarchy.superAdmin,
@@ -210,11 +212,18 @@ async function getHierarchy(req, res) {
       if (data.createdAt && typeof data.createdAt.toDate === 'function') {
         data.createdAt = data.createdAt.toDate().toISOString();
       }
-      // Explicitly include receiptId if it exists and the role is super-distributor
-      if (data.role === 'super-distributor' && data.receiptId) {
-        return { uid: doc.id, ...data, receiptId: data.receiptId };
+      // Explicitly include receiptId if it exists
+      // Explicitly include receiptId; generate if missing
+      if (!data.receiptId) {
+        data.receiptId = 'REC-' + doc.id.substring(0, 8).toUpperCase();
+        // Optionally, update the document in Firestore to persist the new receiptId
+        // This makes the change permanent for existing users without a receiptId
+        db.collection('users').doc(doc.id).update({ receiptId: data.receiptId }).catch(err => {
+          console.error(`Failed to update receiptId for user ${doc.id}:`, err);
+        });
       }
-      return { uid: doc.id, ...data };
+      console.log('User data being sent from getHierarchy:', { uid: doc.id, ...data, receiptId: data.receiptId });
+      return { uid: doc.id, ...data, receiptId: data.receiptId };
     });
     res.json({ success: true, users });
   } catch (error) {
@@ -309,6 +318,7 @@ async function getUsersByRole(req, res) {
       return { _id: doc.id, ...data };
     });
 
+    console.log('Users fetched by role:', users);
     res.json({ users });
   } catch (error) {
     console.error('Error fetching users by role:', error);

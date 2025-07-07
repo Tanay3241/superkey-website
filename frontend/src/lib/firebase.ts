@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase/app';
-import { getAuth, setPersistence, inMemoryPersistence } from 'firebase/auth';
+import { getAuth, setPersistence, browserLocalPersistence } from 'firebase/auth';
 import { getAnalytics, isSupported } from 'firebase/analytics';
 
 const firebaseConfig = {
@@ -15,7 +15,7 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
-setPersistence(auth, inMemoryPersistence);
+setPersistence(auth, browserLocalPersistence);
 
 // Initialize Analytics only if supported
 export const analytics = (async () => {
@@ -27,4 +27,4 @@ export const analytics = (async () => {
     console.warn('Analytics not supported or blocked:', error);
   }
   return null;
-})(); 
+})();
