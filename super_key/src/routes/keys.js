@@ -3,7 +3,7 @@ const router = express.Router();
 const { db } = require('../config/firebase');
 const { requireRole, authenticateUser } = require('../middleware/authMiddleware');
 
-const { createKeys, transferKeys, revokeKeys, getUserKeys } = require('../controllers/keysController');
+const { createKeys, transferKeys, revokeKeys, getKeyTransactions } = require('../controllers/keysController');
 
 
 // 1. Generate Keys (Super Admin only)
