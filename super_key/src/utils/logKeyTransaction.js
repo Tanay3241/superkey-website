@@ -20,6 +20,7 @@ const logKeyTransaction = async ({
   performedBy,
   fromRole,
   toRole,
+  participants,
   reason = ''
 }) => {
   const timestamp = new Date();
@@ -33,6 +34,7 @@ const logKeyTransaction = async ({
     toRole: toRole || null,
     action,
     performedBy,
+    participants,
     reason,
     timestamp
   });

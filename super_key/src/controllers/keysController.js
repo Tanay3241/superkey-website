@@ -62,6 +62,7 @@ async function createKeys(req, res) {
       action: 'created',
       fromUser: null,
       toUser: req.user.uid,
+      participants: [req.user.uid],
       fromRole: null,
       toRole: 'super_admin',
       performedBy: req.user.uid,
@@ -168,6 +169,7 @@ async function transferKeys(req, res) {
       keyIds,
       fromUser: fromUserId,
       toUser: toUserId,
+      participants: [fromUserId, toUserId],
       fromRole,
       toRole: toUser.role,
       performedBy: fromUserId,
@@ -234,6 +236,7 @@ async function revokeKeys (req, res) {
       performedBy: req.user.uid,
       fromRole: 'super_admin',
       toRole: null,
+      participants: [userId],
       reason: reason || `Revoked by Super Admin`
     });
 
@@ -244,112 +247,48 @@ async function revokeKeys (req, res) {
   }
 }
 
-async function provisionKey(req, res) {
+async function getKeyTransactions (req, res) {
+  const uid = req.user.uid;
+  const pageSize = parseInt(req.query.pageSize) || 10;
+  const cursor = req.query.cursor ? Number(req.query.cursor) : null;
+
   try {
-    const { keyId, endUserId, deviceName, imei1, imei2 } = req.body;
-    const provisionedBy = req.user.uid;
+    let query = db.collection('keyTransactions')
+      .where('participants', 'array-contains', uid)
+      .orderBy('timestamp', 'desc')
+      .limit(pageSize);
 
-    if (!keyId || !endUserId || !deviceName || !imei1 || !imei2) {
-      return res.status(400).json({ error: 'Missing required fields for provisioning' });
+    if (cursor) {
+      query = query.startAfter(admin.firestore.Timestamp.fromMillis(cursor));
     }
 
-    const keyRef = db.collection('keys').doc(keyId);
-    const keyDoc = await keyRef.get();
+    const snap = await query.get();
 
-    if (!keyDoc.exists) {
-      return res.status(404).json({ error: 'Key not found' });
-    }
-
-    const keyData = keyDoc.data();
-
-    if (keyData.assignedTo !== provisionedBy || !['unassigned', 'credited'].includes(keyData.status)) {
-      return res.status(403).json({ error: 'Key is not available for provisioning by this user' });
-    }
-
-    const endUserRef = db.collection('endUsers').doc(endUserId);
-    const endUserDoc = await endUserRef.get();
-
-    if (!endUserDoc.exists) {
-      return res.status(404).json({ error: 'End user not found' });
-    }
-
-    const batch = db.batch();
-    const now = admin.firestore.Timestamp.now();
-
-    batch.update(keyRef, {
-      status: 'provisioned',
-      provisionedAt: now,
-      provisionedBy: provisionedBy,
-      assignedTo: endUserId, // Assign to end user
-      assignedRole: 'end_user',
-      deviceName,
-      imei1,
-      imei2,
-      // Clear previous assignment details if any
-      transferredFrom: admin.firestore.FieldValue.delete(),
-      distributor: admin.firestore.FieldValue.delete(),
-      retailer: admin.firestore.FieldValue.delete(),
+    const transactions = snap.docs.map(doc => {
+      const data = doc.data();
+      const { keyIds, participants, performedBy, ...dataWithoutKeyIds } = data;
+      return { id: doc.id, ...dataWithoutKeyIds };
     });
+    
+    const hasMore = snap.size === pageSize;
+    let nextCursor = null;
+    if (hasMore) {
+      const lastDoc = snap.docs[snap.docs.length - 1];
+      nextCursor = lastDoc ? lastDoc.data().timestamp.toMillis() : null;
+    }
 
-    // Update the wallet of the user who provisioned the key
-    const provisionerUserRef = db.collection('users').doc(provisionedBy);
-    batch.update(provisionerUserRef, {
-      'wallet.availableKeys': admin.firestore.FieldValue.increment(-1),
-      'wallet.totalProvisioned': admin.firestore.FieldValue.increment(1),
-    });
-
-    await batch.commit();
-
-    await logKeyTransaction({
-      keyIds: [keyId],
-      fromUser: provisionedBy,
-      toUser: endUserId,
-      action: 'provisioned',
-      performedBy: provisionedBy,
-      reason: `Key ${keyId} provisioned to end user ${endUserId}`,
-    });
-
-    res.json({ success: true, message: 'Key provisioned successfully' });
-  } catch (error) {
-    console.error('Error provisioning key:', error);
-    res.status(500).json({ error: error.message });
+    res.json({ transactions, nextCursor, hasMore });
+  } catch (err) {
+    console.error('Error fetching paginated key transactions:', err);
+    res.status(500).json({ error: 'Failed to retrieve transactions' });
   }
 }
 
-async function getUserKeys(req, res) {
-  try {
-    const { userId } = req.params;
 
-    if (!userId) {
-      return res.status(400).json({ error: 'User ID is required' });
-    }
-
-    // Ensure the requesting user is a super_admin or the user themselves
-    if (req.user.role !== 'super_admin' && req.user.uid !== userId) {
-      return res.status(403).json({ error: 'Unauthorized: You can only view your own keys unless you are a super admin.' });
-    }
-
-    const snapshot = await db.collection('keys')
-      .where('assignedTo', '==', userId)
-      .where('status', 'in', ['unassigned', 'credited'])
-      .get();
-
-    const keys = [];
-    snapshot.forEach(doc => {
-      keys.push({ id: doc.id, ...doc.data() });
-    });
-
-    res.json({ keys });
-  } catch (error) {
-    console.error('Error fetching user keys:', error);
-    res.status(500).json({ error: error.message });
-  }
-}
 
 module.exports = {
   createKeys,
   transferKeys,
   revokeKeys,
-  provisionKey,
-  getUserKeys
+  getKeyTransactions
 };

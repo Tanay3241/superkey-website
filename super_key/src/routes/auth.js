@@ -2,10 +2,6 @@ const express = require('express');
 const router = express.Router();
 const { admin, db } = require('../config/firebase');
 const { authenticateUser } = require('../middleware/authMiddleware');
-const fetch = require('node-fetch');
-
-
-
 
 
 // LOGIN: Handle email/password login

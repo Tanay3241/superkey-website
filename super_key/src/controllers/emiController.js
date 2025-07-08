@@ -14,9 +14,7 @@ async function payEMI(req, res) {
     if (!userDoc.exists || userData.registeredBy !== req.user.uid) {
       return res.status(403).json({ error: 'Not authorized to pay EMI for this user' });
     }
-    if (amount > emiData.amount_left) {
-      return res.status(400).json({ error: 'Payment exceeds remaining amount' });
-    }
+
     const emiSnap = await userRef.collection('emi')
       .orderBy('start_date', 'desc') // Assuming latest EMI record
       .limit(1)
@@ -27,6 +25,9 @@ async function payEMI(req, res) {
     const emiDoc = emiSnap.docs[0];
     const emiData = emiDoc.data();
 
+    if (amount > emiData.amount_left) {
+      return res.status(400).json({ error: 'Payment exceeds remaining amount' });
+    }
     if (emiData.installments_left <= 0) {
       return res.status(400).json({ error: 'EMI already fully paid' });
     }
@@ -69,7 +70,7 @@ async function payEMI(req, res) {
   }
 }
 
-async function fetchEmiLogs (req, res) {
+async function fetchEmiLogs(req, res) {
   try {
     const { endUserId } = req.params;
 
@@ -97,7 +98,7 @@ async function fetchEmiLogs (req, res) {
             hour: 'numeric',
             minute: 'numeric',
             hour12: true
-          })          
+          })
           : null
       };
     });

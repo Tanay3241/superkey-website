@@ -1,7 +1,6 @@
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
-const morgan = require('morgan');
 require('dotenv').config({ path: require('path').resolve(__dirname, '../.env') });
 const cookieParser = require('cookie-parser');
 const session = require('express-session');
@@ -10,6 +9,7 @@ const MongoDBStore = require('connect-mongodb-session')(session);
 const app = express();
 
 // Middleware
+app.use(helmet());
 app.use((req, res, next) => {
   console.log(`App: Request received: ${req.method} ${req.url}`);
   next();

@@ -10,7 +10,6 @@ async function createEndUser(req, res) {
       deviceName,
       imei1,
       imei2,
-      keyId,
       emi
     } = req.body;
     const retailerId = req.user && req.user.uid;
@@ -18,7 +17,7 @@ async function createEndUser(req, res) {
     if (!retailerId) {
       return res.status(401).json({ error: 'Unauthorized retailer' });
     }
-    if (!fullName || !email || !phoneNumber || !imei1 || !imei2 || !keyId || !emi || !deviceName) {
+    if (!fullName || !email || !phoneNumber || !imei1 || !imei2 || !emi || !deviceName) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
     if (!emi || !emi.start_date || !emi.installments_left || !emi.monthly_installment || !emi.total_amount) {
@@ -31,9 +30,21 @@ async function createEndUser(req, res) {
     if (!retailerDoc.exists) {
       return res.status(404).json({ error: 'Retailer not found' });
     }
-    const keySnap = await db.collection('keys').doc(keyId).get();
-    if (!keySnap.exists) return res.status(404).json({ error: 'Key not found' });
-    const key = keySnap.data();
+    const keysSnap = await db.collection('keys')
+      .where('assignedTo', '==', retailerId)
+      .where('status', '==', 'credited') // or use .in([...]) if needed
+      .limit(1)
+      .get();
+
+    if (keysSnap.empty) {
+      return res.status(400).json({ error: 'No available keys to provision' });
+    }
+
+    const keyDoc = keysSnap.docs[0];
+    const keyId = keyDoc.id;
+    const keyRef = keyDoc.ref;
+    const key = keyDoc.data();
+
     if (key.assignedTo !== retailerId || key.status !== 'credited') {
       return res.status(403).json({
         error: 'Key is not assigned to you or is already provisioned'
@@ -44,9 +55,9 @@ async function createEndUser(req, res) {
     const now = admin.firestore.Timestamp.now();
     const rtdbRef = dbRT.ref('users').push();
     const rtdbId = rtdbRef.key;
-    const consumerRef = db.collection('endUsers').doc();
-    const consumerId = consumerRef.id;
-    const consumerData = {
+    const enduserRef = db.collection('endUsers').doc();
+    const enduserId = enduserRef.id;
+    const enduserData = {
       fullName,
       email,
       phoneNumber,
@@ -60,7 +71,10 @@ async function createEndUser(req, res) {
       createdAt: now
     };
     const startDate = new Date(emi.start_date);
-    const nextInstallmentDate = new Date(startDate.getTime() + 2592000000); // 30 days
+    const nextDate = new Date(startDate);
+    nextDate.setMonth(nextDate.getMonth() + 1);
+
+    const nextInstallmentDate = admin.firestore.Timestamp.fromDate(nextDate);
     const emiDoc = {
       ...emi,
       start_date: admin.firestore.Timestamp.fromDate(startDate),
@@ -69,13 +83,12 @@ async function createEndUser(req, res) {
 
     // 4. Firestore batch (atomic)
     const batch = db.batch();
-    batch.set(consumerRef, consumerData);
-    batch.set(consumerRef.collection('emi').doc(), emiDoc);
-    const keyRef = db.collection('keys').doc(keyId);
+    batch.set(enduserRef, enduserData);
+    batch.set(enduserRef.collection('emi').doc(), emiDoc);
     batch.update(keyRef, {
       status: 'provisioned',
       provisionedAt: now,
-      user_id: consumerId
+      user_id: enduserId
     });
     batch.update(retailerRef, {
       'wallet.availableKeys': admin.firestore.FieldValue.increment(-1),
@@ -142,9 +155,10 @@ async function createEndUser(req, res) {
         keyIds: [keyId],
         action: 'provisioned',
         fromUser: retailerId,
-        toUser: consumerId,
+        toUser: enduserId,
         fromRole: 'retailer',
         toRole: 'end_user',
+        participants: [retailerId, enduserId],
         performedBy: retailerId,
         reason: `Provisioned to user ${fullName}`
       });
@@ -154,9 +168,9 @@ async function createEndUser(req, res) {
       // Do not fail the request, but inform in logs
     }
 
-    res.json({ success: true, message: 'Consumer created and device provisioned', consumerId, rtdbId });
+    res.json({ success: true, message: 'EndUser created and device provisioned', enduserId, rtdbId });
   } catch (error) {
-    console.error('Consumer creation error:', error);
+    console.error('EndUser creation error:', error);
     res.status(500).json({ error: error.message });
   }
 }
