@@ -1,93 +1,86 @@
-import { Suspense, lazy } from "react";
-import { Toaster as Sonner } from "@/components/ui/sonner";
-import { TooltipProvider } from "@/components/ui/tooltip";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
-import { AuthProvider } from "@/contexts/AuthContext";
-import { ThemeProvider } from "@/contexts/ThemeContext";
-import ProtectedRoute from "@/components/ProtectedRoute";
-import { DashboardLayout } from "@/components/DashboardLayout";
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { lazy, Suspense } from 'react';
+import { AuthProvider } from './contexts/AuthContext';
+import DashboardLayout from './components/DashboardLayout';
+import ProtectedRoute from './components/ProtectedRoute';
+import Index from './pages/Index';
+import { Toaster } from 'sonner';
 
-// 🔁 Lazy-loaded pages
-const Index = lazy(() => import("@/pages/Index"));
-const Dashboard = lazy(() => import("@/pages/Dashboard"));
-const Wallet = lazy(() => import("@/pages/Wallet"));
-const Keys = lazy(() => import("@/pages/Keys"));
-const MyKeys = lazy(() => import("@/pages/MyKeys"));
-const Users = lazy(() => import("@/pages/Users"));
-const NotFound = lazy(() => import("@/pages/NotFound"));
-
-const queryClient = new QueryClient();
+// Lazy-loaded page components
+const Dashboard = lazy(() => import('@/pages/Dashboard'));
+const Users = lazy(() => import('./pages/Users'));
+const Wallet = lazy(() => import('./pages/Wallet'));
+const Keys = lazy(() => import('./pages/Keys'));
 
 export default function App() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <ThemeProvider>
-        <TooltipProvider>
-          <AuthProvider>
-            <BrowserRouter>
-              <Suspense fallback={<div className="text-white text-center p-10">Loading...</div>}>
-                <Routes>
-                  <Route path="/" element={<Index />} />
-                  <Route path="/login" element={<Index />} />
-                  <Route
-                    path="/dashboard"
-                    element={
-                      <ProtectedRoute>
-                        <DashboardLayout>
-                          <Dashboard />
-                        </DashboardLayout>
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/wallet"
-                    element={
-                      <ProtectedRoute>
-                        <DashboardLayout>
-                          <Wallet />
-                        </DashboardLayout>
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/keys"
-                    element={
-                      <ProtectedRoute allowedRoles={["super_admin", "super_distributor", "distributor"]}>
-                        <DashboardLayout>
-                          <Keys />
-                        </DashboardLayout>
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/my-keys"
-                    element={
-                      <ProtectedRoute allowedRoles={["retailer"]}>
-                        <DashboardLayout>
-                          <MyKeys />
-                        </DashboardLayout>
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/users"
-                    element={
-                      <ProtectedRoute allowedRoles={["super_admin", "super_distributor", "distributor"]}>
-                        <DashboardLayout>
-                          <Users />
-                        </DashboardLayout>
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route path="*" element={<NotFound />} />
-                </Routes>
+    <BrowserRouter>
+      <AuthProvider>
+        <Toaster richColors position="top-center" />
+        <Routes>
+          <Route path="/" element={<Index />} />
+          <Route path="/dashboard" element={
+            <DashboardLayout>
+              <Suspense
+                fallback={
+                  <div className="min-h-screen flex items-center justify-center bg-background">
+                    <div className="animate-spin h-12 w-12 border-4 border-foreground border-t-transparent rounded-full" />
+                  </div>
+                }
+              >
+                <ProtectedRoute>
+                  <Dashboard />
+                </ProtectedRoute>
               </Suspense>
-              <Sonner />
-            </BrowserRouter>
-          </AuthProvider>
-        </TooltipProvider>
-      </ThemeProvider>
-    </QueryClientProvider>
+            </DashboardLayout>
+          } />
+          <Route path="/users" element={
+            <DashboardLayout>
+              <Suspense
+                fallback={
+                  <div className="min-h-screen flex items-center justify-center bg-background">
+                    <div className="animate-spin h-12 w-12 border-4 border-foreground border-t-transparent rounded-full" />
+                  </div>
+                }
+              >
+                <ProtectedRoute>
+                  <Users />
+                </ProtectedRoute>
+              </Suspense>
+            </DashboardLayout>
+          } />
+          <Route path="/wallet" element={
+            <DashboardLayout>
+              <Suspense
+                fallback={
+                  <div className="min-h-screen flex items-center justify-center bg-background">
+                    <div className="animate-spin h-12 w-12 border-4 border-foreground border-t-transparent rounded-full" />
+                  </div>
+                }
+              >
+                <ProtectedRoute>
+                  <Wallet />
+                </ProtectedRoute>
+              </Suspense>
+            </DashboardLayout>
+          } />
+          <Route path="/keys" element={
+            <DashboardLayout>
+              <Suspense
+                fallback={
+                  <div className="min-h-screen flex items-center justify-center bg-background">
+                    <div className="animate-spin h-12 w-12 border-4 border-foreground border-t-transparent rounded-full" />
+                  </div>
+                }
+              >
+                <ProtectedRoute>
+                  <Keys />
+                </ProtectedRoute>
+              </Suspense>
+            </DashboardLayout>
+          } />
+        </Routes>
+      </AuthProvider>
+    </BrowserRouter>
   );
 }

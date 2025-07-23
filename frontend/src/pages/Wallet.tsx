@@ -1,131 +1,124 @@
+import React, { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { AlertCircle, Key, Download, Upload, Rocket, XCircle } from 'lucide-react';
+import TransactionHistory from '@/components/TransactionHistory';
+import { toast } from 'sonner';
+import { cn } from '@/lib/utils';
+import { StatCard } from '@/components/StatCard';
 
 export default function Wallet() {
   const { user } = useAuth();
+  const [errorBanner, setErrorBanner] = useState<string | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  if (!user || !user.wallet) {
+    toast.error('Failed to load wallet data. Please try again.');
+    return (
+      <div className="container mx-auto p-6">
+        <div className="bg-red-100 dark:bg-red-900/20 text-red-700 dark:text-red-300 p-4 rounded mb-4">Failed to load wallet data. Please refresh or contact support.</div>
+      </div>
+    );
+  }
 
   const stats = [
     {
-      title: 'Total Provisioned',
-      value: user?.wallet?.totalProvisioned || 0,
-      description: 'Total keys provisioned to end users',
-      roles: ['retailer'] // Only visible to retailers
-    },
-    {
-      title: 'Revoked Keys',
-      value: user?.wallet?.totalRevoked || 0,
-      description: 'Total keys revoked from your account'
-    },
-    {
       title: 'Available Keys',
-      value: user?.wallet?.availableKeys || 0,
-      description: 'Keys ready to transfer or provision'
+      value: (user?.wallet?.availableKeys || 0).toString(),
+      icon: Key,
+      gradient: 'from-blue-500 to-cyan-500'
     },
     {
       title: 'Total Received',
-      value: user?.wallet?.totalKeysReceived || 0,
-      description: 'Total keys received from higher level'
+      value: (user?.wallet?.totalKeysReceived || 0).toString(),
+      icon: Download,
+      gradient: 'from-green-500 to-emerald-500'
     },
     {
       title: 'Total Transferred',
-      value: user?.wallet?.totalKeysTransferred || 0,
-      description: 'Total keys transferred to lower level'
+      value: (user?.wallet?.totalKeysTransferred || 0).toString(),
+      icon: Upload,
+      gradient: 'from-purple-500 to-pink-500'
     },
-
+    {
+      title: 'Total Provisioned',
+      value: (user?.wallet?.totalProvisioned || 0).toString(),
+      icon: Rocket,
+      gradient: 'from-yellow-500 to-orange-500'
+    },
+    {
+      title: 'Revoked Keys',
+      value: (user?.wallet?.totalRevoked || 0).toString(),
+      icon: XCircle,
+      gradient: 'from-rose-500 to-red-600'
+    },
   ];
 
   return (
-    <div className="container mx-auto p-6">
-      <h1 className="text-3xl font-bold mb-6">My Wallet</h1>
+    <div className="container mx-auto p-6 space-y-6">
+      {errorBanner && (
+        <div className="bg-red-100 dark:bg-red-900/20 text-red-700 dark:text-red-300 p-4 rounded mb-4">
+          {errorBanner}
+        </div>
+      )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-        {stats.map((stat) => (
-          (!stat.roles || stat.roles.includes(user?.role as string)) ? (
-            <Card key={stat.title}>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">
-                  {stat.title}
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{stat.value}</div>
-                <p className="text-xs text-muted-foreground">
-                  {stat.description}
-                </p>
-              </CardContent>
-            </Card>
-          ) : null
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+        {stats.map((stat, index) => (
+          <StatCard
+            key={index}
+            {...stat}
+            className={stat.title === 'Revoked Keys' ? 'border-rose-200 dark:border-rose-800' : ''}
+          />
         ))}
       </div>
 
-      <Tabs defaultValue="transactions" className="space-y-4">
-        <TabsList>
-          <TabsTrigger value="transactions">Recent Transactions</TabsTrigger>
+      {/* Transaction History */}
+      <Card className="overflow-hidden border border-gray-200 dark:border-gray-700/50">
+        <CardHeader className="bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900 border-b border-gray-200 dark:border-gray-700/50 p-4">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div>
+              <CardTitle className="text-xl text-gray-900 dark:text-gray-100">Transaction History</CardTitle>
+              <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">
+                All key transactions in your account
+              </p>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="p-0">
+          <TransactionHistory 
+            key={`${user?.role}-${refreshKey}`}
+            filterRole={user?.role}
+            className="border-0"
+          />
+        </CardContent>
+      </Card>
 
-          <TabsTrigger value="transfer">Transfer Keys</TabsTrigger>
-          <TabsTrigger value="revoked">Revoked Keys</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="transactions">
-          <Card>
-            <CardHeader>
-              <CardTitle>Transaction History</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-center text-muted-foreground">
-                Transaction history will be implemented soon
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="transfer">
-          <Card>
-            <CardHeader>
-              <CardTitle>Transfer Keys</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-center text-muted-foreground">
-                Transfer keys functionality will be implemented soon
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="revoked">
-          <Card>
-            <CardHeader>
-              <CardTitle>Revoked Keys History</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-center text-muted-foreground">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead>
-                    <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">User ID</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Count</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Reason</th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    <tr>
-                      <td className="px-6 py-4 whitespace-nowrap">user123</td>
-                      <td className="px-6 py-4 whitespace-nowrap">5</td>
-                      <td className="px-6 py-4 whitespace-nowrap">Fraudulent activity</td>
-                    </tr>
-                    <tr>
-                      <td className="px-6 py-4 whitespace-nowrap">user456</td>
-                      <td className="px-6 py-4 whitespace-nowrap">2</td>
-                      <td className="px-6 py-4 whitespace-nowrap">Account suspended</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
+      {/* Revoked Keys Section */}
+      {user?.wallet?.totalRevoked > 0 && (
+        <Card className="border-rose-800 bg-rose-950/90">
+          <CardHeader>
+            <CardTitle className="flex items-center text-rose-200">
+              <AlertCircle className="h-5 w-5 text-rose-500 mr-2" />
+              <span>Revoked Keys</span>
+            </CardTitle>
+            <CardDescription className="text-rose-300">
+              You have {user.wallet.totalRevoked} revoked key(s) in your account
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button 
+              variant="outline" 
+              className="border-rose-800 text-rose-400 hover:bg-rose-900/30 hover:text-rose-300"
+              onClick={() => {
+                setRefreshKey(prev => prev + 1);
+              }}
+            >
+              View Revoked Keys History
+            </Button>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

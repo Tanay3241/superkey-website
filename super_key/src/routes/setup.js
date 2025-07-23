@@ -1,51 +1,66 @@
 const express = require('express');
 const router = express.Router();
-const { db, admin } = require('../config/firebase');
+const { admin, db } = require('../config/firebase');
 
-router.post('/super-admin', async (req, res) => {
+// Setup route to create initial admin user
+router.post('/create-admin', async (req, res) => {
   try {
-    const { fullName, email, phone, password, setupKey } = req.body;
+    const { email, password, name } = req.body;
 
-    if (!fullName || !email || !phone || !password || !setupKey) {
-      return res.status(400).json({ error: 'Missing required fields' });
+    if (!email || !password || !name) {
+      return res.status(400).json({ error: 'Email, password, and name are required' });
     }
 
-    if (setupKey !== process.env.SUPER_ADMIN_SETUP_KEY) {
-      return res.status(403).json({ error: 'Invalid setup key' });
+    // Check if user already exists in Firebase Auth
+    try {
+      const existingUser = await admin.auth().getUserByEmail(email);
+      if (existingUser) {
+        return res.status(400).json({ error: 'User already exists' });
+      }
+    } catch (error) {
+      // User doesn't exist, continue with creation
+      if (error.code !== 'auth/user-not-found') {
+        throw error;
+      }
     }
 
-    // Check if any super admin already exists (optional safeguard)
-    const snap = await db.collection('users')
-      .where('role', '==', 'super_admin')
-      .limit(1)
-      .get();
-
-    if (!snap.empty) {
-      return res.status(403).json({ error: 'Super admin already exists' });
-    }
-
-    // Create Firebase Auth user
+    // Create user in Firebase Auth
     const userRecord = await admin.auth().createUser({
       email,
       password,
-      displayName: fullName,
-      phoneNumber: phone
+      displayName: name,
     });
 
-    // Store in Firestore
+    // Set custom claims for admin role
+    await admin.auth().setCustomUserClaims(userRecord.uid, {
+      role: 'super_admin'
+    });
+
+    // Create user document in Firestore
     await db.collection('users').doc(userRecord.uid).set({
-      fullName,
       email,
-      phone,
+      name,
       role: 'super_admin',
-      createdAt: admin.firestore.Timestamp.now()
+      status: 'active',
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      wallet: {
+        availableKeys: 0,
+        totalKeysReceived: 0,
+        totalKeysTransferred: 0,
+        totalProvisioned: 0,
+        totalRevoked: 0
+      }
     });
 
-    res.json({ success: true, message: 'Super Admin created successfully', uid: userRecord.uid });
-  } catch (err) {
-    console.error('Super admin setup error:', err);
-    res.status(500).json({ error: err.message });
+    res.json({ 
+      success: true, 
+      message: 'Admin user created successfully',
+      uid: userRecord.uid 
+    });
+  } catch (error) {
+    console.error('Setup error:', error);
+    res.status(500).json({ error: error.message });
   }
 });
 
-module.exports = { router };
+module.exports = router;

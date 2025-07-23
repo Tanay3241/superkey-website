@@ -25,6 +25,14 @@ const logKeyTransaction = async ({
 }) => {
   const timestamp = new Date();
 
+  // Ensure performedBy is always included in participants
+  const allParticipants = Array.from(new Set([
+    ...(participants || []),
+    performedBy,
+    fromUser,
+    toUser
+  ].filter(Boolean)));
+
   const txRef = db.collection('keyTransactions').doc();
   await txRef.set({
     keyIds, // store the array of key IDs
@@ -34,7 +42,7 @@ const logKeyTransaction = async ({
     toRole: toRole || null,
     action,
     performedBy,
-    participants,
+    participants: allParticipants,
     reason,
     timestamp
   });

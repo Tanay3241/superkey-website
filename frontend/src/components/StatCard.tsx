@@ -1,52 +1,47 @@
 
-import { ReactNode } from 'react';
-import { Card, CardContent } from '@/components/ui/card';
+import React from 'react';
+import { Card } from '@/components/ui/card';
 import { LucideIcon } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 interface StatCardProps {
   title: string;
-  value: string | number;
+  value: string;
   icon: LucideIcon;
-  description?: string;
-  trend?: {
-    value: number;
-    isPositive: boolean;
-  };
-  gradient?: string;
+  gradient: string;
+  className?: string;
 }
 
-export const StatCard = ({ 
-  title, 
-  value, 
-  icon: Icon, 
-  description, 
-  trend,
-  gradient = "from-blue-500 to-purple-600"
-}: StatCardProps) => {
+export const StatCard: React.FC<StatCardProps> = ({
+  title,
+  value,
+  icon: Icon,
+  gradient,
+  className
+}) => {
   return (
-    <Card className="border-0 shadow-lg hover-scale cursor-pointer transition-all duration-300 overflow-hidden">
-      <div className={`h-2 bg-gradient-to-r ${gradient}`} />
-      <CardContent className="p-6">
-        <div className="flex items-start justify-between">
-          <div className="flex-1">
-            <p className="text-sm font-medium text-muted-foreground mb-1">{title}</p>
-            <div className="flex items-baseline space-x-2">
-              <p className="text-2xl font-bold text-foreground animated-counter">{value}</p>
-              {trend && (
-                <span className={`text-sm font-medium ${trend.isPositive ? 'text-green-600' : 'text-red-600'}`}>
-                  {trend.isPositive ? '+' : ''}{trend.value}%
-                </span>
-              )}
-            </div>
-            {description && (
-              <p className="text-sm text-muted-foreground mt-1">{description}</p>
-            )}
-          </div>
-          <div className={`p-3 rounded-full bg-gradient-to-br ${gradient} text-white`}>
-            <Icon className="w-6 h-6" />
-          </div>
+    <Card className={cn(
+      "bg-white dark:bg-gray-800/50 border border-gray-200/20 dark:border-gray-700/50 backdrop-blur-sm p-6",
+      className
+    )}>
+      <div className="flex items-start justify-between">
+        <div>
+          <p className="text-gray-600 dark:text-gray-300 mb-1">{title}</p>
+          <h3 className="text-2xl font-bold text-gray-900 dark:text-white">{value}</h3>
         </div>
-      </CardContent>
+        <div className={cn(
+          "p-3 rounded-xl bg-gradient-to-r",
+          gradient,
+          title === "Revoked Keys" ? "bg-opacity-20" : "bg-opacity-10"
+        )}>
+          <Icon className={cn(
+            "w-6 h-6",
+            title === "Revoked Keys" 
+              ? "text-rose-500 dark:text-rose-400" 
+              : "text-gray-800 dark:text-gray-200"
+          )} />
+        </div>
+      </div>
     </Card>
   );
 };

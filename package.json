@@ -1,0 +1,8 @@
+{
+  "dependencies": {
+    "@types/react": "^19.1.8",
+    "@types/react-dom": "^19.1.6",
+    "react-error-boundary": "^6.0.0",
+    "react-router-dom": "^7.6.3"
+  }
+}

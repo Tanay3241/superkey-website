@@ -1,5 +1,26 @@
 const { admin, db, dbRT } = require('../config/firebase');
 const { logKeyTransaction } = require('../utils');
+
+// Default feature configuration
+const DEFAULT_FEATURES = {
+  apps: [],
+  isAppBlocking: false,
+  isAppInstallation: false,
+  isCamera: true,
+  isDeveloperOptions: true,
+  isHardReset: false,
+  isIncomingCalls: false,
+  isLockEnable: true,
+  isOutgoingCalls: true,
+  isSetting: true,
+  isSoftBoot: true,
+  isSoftReset: false,
+  isUSBDebug: true,
+  passwordChange: 'changeme123',
+  warningAudio: true,
+  warningWallpaper: true
+};
+
 async function createEndUser(req, res) {
   try {
     // 1. Validate and extract input
@@ -32,7 +53,7 @@ async function createEndUser(req, res) {
     }
     const keysSnap = await db.collection('keys')
       .where('assignedTo', '==', retailerId)
-      .where('status', '==', 'credited') // or use .in([...]) if needed
+      .where('status', '==', 'credited')
       .limit(1)
       .get();
 
@@ -112,25 +133,7 @@ async function createEndUser(req, res) {
         totalAmountLeft: emi.amount_left,
         dueDate: nextInstallmentDate.toISOString(),
       },
-      features: {
-        apps: [],
-        isAppBlocking: false,
-        isAppInstallation: false,
-        isCamera: true,
-        isDeveloperOptions: true,
-        isHardReset: false,
-        isIncomingCalls: false,
-        isLockEnable: true,
-        isOutgoingCalls: true,
-        isSetting: true,
-        isSoftBoot: true,
-        isSoftReset: false,
-        isUSBDebug: true,
-        passwordChange: 'changeme123',
-        wallpaperUrl: 'https://wallpapercave.com/wp/wp4381390.jpg',
-        warningAudio: true,
-        warningWallpaper: true
-      },
+      features: DEFAULT_FEATURES,
       getRecentContacts: '',
       location: { lat: 0, lng: 0 },
       retailer: {
@@ -138,14 +141,13 @@ async function createEndUser(req, res) {
         phoneNumber: retailerData.phone,
         email: retailerData.email,
         shopName: retailerData.shopName || "Shop's name",
-        qrUrl: retailerData.qrUrl || 'https://static.beebom.com/wp-content/uploads/2021/02/qr-code-sample.jpg'
+        qrUrl: retailerData.qrUrl || ''
       }
     };
     try {
       await rtdbRef.set(defaultRTDBPayload);
     } catch (rtdbError) {
       console.error('RTDB write error:', rtdbError);
-      // Optionally: flag for manual reconciliation
       return res.status(500).json({ error: 'Provisioned in Firestore, but failed to write to RTDB. Please contact support.' });
     }
 
@@ -164,8 +166,6 @@ async function createEndUser(req, res) {
       });
     } catch (logError) {
       console.error('Transaction log error:', logError);
-      // Optionally: flag for manual reconciliation
-      // Do not fail the request, but inform in logs
     }
 
     res.json({ success: true, message: 'EndUser created and device provisioned', enduserId, rtdbId });
@@ -177,4 +177,4 @@ async function createEndUser(req, res) {
 
 module.exports = {
   createEndUser
-}
+};

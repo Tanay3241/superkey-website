@@ -1,65 +1,137 @@
-const { admin, db } = require('../config/firebase');
-
-const requireRole = (roles) => {
-  return async (req, res, next) => {
-    console.log('Inside requireRole middleware.');
-    console.log('requireRole: req.user:', req.user);
-    try {
-      console.log('requireRole: Fetching user data for UID:', req.user.uid);
-      const userDoc = await db.collection('users').doc(req.user.uid).get();
-
-      if (!userDoc.exists) {
-        return res.status(404).json({ error: 'User not found' });
-      }
-
-      const userData = userDoc.data();
-      if (!roles.includes(userData.role)) {
-        console.log('requireRole: User does not have required role. User role:', userData.role, 'Required roles:', roles);
-        return res.status(403).json({ error: 'Insufficient permissions' });
-      }
-
-      req.userData = userData;
-      next();
-    } catch (error) {
-    console.error('Authorization error:', error);
-    console.error('Full authorization error stack:', error.stack);
-    return res.status(500).json({ error: 'Authorization failed' });
-    }
-  };
-};
+const { admin } = require('../config/firebase');
 
 const authenticateUser = async (req, res, next) => {
+  // Add CORS headers
+  res.header('Access-Control-Allow-Origin', 'http://localhost:5173'); // Or whatever your frontend's actual port is
+  res.header('Access-Control-Allow-Credentials', 'true');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+
+  // Handle preflight requests
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+
+  // If user is already authenticated via session, proceed
+  if (req.session && req.session.user) {
+    req.user = req.session.user;
+    return next();
+  }
+
   try {
-    console.log('Inside authenticateUser middleware.');
-    console.log('authenticateUser: Received cookies (from req.cookies):', req.cookies);
-    console.log('authenticateUser: Session ID (req.sessionID):', req.sessionID);
-    console.log('Session cookie value (req.cookies[\'connect.sid\']):', req.cookies['connect.sid']);
-    console.log('Raw Cookie Header (from req.headers.cookie):', req.headers.cookie);
-    let decoded;
+    const authHeader = req.headers.authorization;
+    console.log('Auth request from origin:', req.headers.origin);
+    console.log('Auth header:', authHeader);
 
-    // Check for session (web)
-    if (req.session && req.session.uid) {
-      console.log('authenticateUser: Session found with UID:', req.session.uid);
-    console.log('authenticateUser: Session object:', req.session);
-      decoded = { uid: req.session.uid }; // Create a decoded object similar to what verifyIdToken would return
-    }
-    // Check for Bearer token (mobile)
-    else if (req.headers.authorization?.startsWith('Bearer ')) {
-      const idToken = req.headers.authorization.split('Bearer ')[1];
-      decoded = await admin.auth().verifyIdToken(idToken);
-    } else {
-      return res.status(401).json({ error: 'Unauthorized request' });
+    if (!authHeader?.startsWith('Bearer ')) {
+      console.log('No bearer token found');
+      return res.status(401).json({ 
+        error: 'No token provided',
+        details: 'Authorization header must start with Bearer'
+      });
     }
 
-    req.user = decoded;
-    console.log('authenticateUser: req.user populated with UID:', req.user.uid);
+    const token = authHeader.split('Bearer ')[1];
+    console.log('Attempting to verify token...');
+    
+    const decodedToken = await admin.auth().verifyIdToken(token);
+    console.log('Token verified successfully for:', decodedToken.uid);
+
+    // Get user data from Firestore with error handling
+    const userDoc = await admin.firestore()
+      .collection('users')
+      .doc(decodedToken.uid)
+      .get()
+      .catch(error => {
+        console.error('Firestore fetch error:', error);
+        throw new Error('Failed to fetch user data');
+      });
+
+    if (!userDoc.exists) {
+      console.log('User document not found for:', decodedToken.uid);
+      return res.status(404).json({ 
+        error: 'User not found',
+        details: 'No matching user document in Firestore'
+      });
+    }
+
+    const userData = userDoc.data();
+    if (!userData.role) {
+      console.log('User role not found for:', decodedToken.uid);
+      return res.status(400).json({ 
+        error: 'Invalid user data',
+        details: 'User role not specified'
+      });
+    }
+
+    req.user = {
+      uid: decodedToken.uid,
+      email: decodedToken.email,
+      role: userData.role,
+      name: userData.name || userData.email
+    };
+
+    console.log('User successfully authenticated:', {
+      uid: req.user.uid,
+      role: req.user.role
+    });
+    
     next();
-  } catch (err) {
-    console.error('authenticateUser: Authentication error:', err);
-    console.error('authenticateUser: Error details:', err.message, err.stack);
+  } catch (error) {
+    console.error('Authentication error details:', error);
+    
+    // Handle specific Firebase Auth errors
+    if (error.code === 'auth/id-token-expired') {
+      return res.status(401).json({ 
+        error: 'Token expired',
+        details: 'Please log in again'
+      });
+    }
+    
+    if (error.code === 'auth/invalid-token') {
+      return res.status(401).json({ 
+        error: 'Invalid token',
+        details: 'Token validation failed'
+      });
+    }
 
-    res.status(401).json({ error: 'Unauthorized' });
+    res.status(401).json({ 
+      error: 'Authentication failed',
+      details: error.message
+    });
   }
 };
 
-module.exports = { requireRole, authenticateUser };
+const requireRole = (roles) => {
+  return (req, res, next) => {
+    if (!req.user) {
+      return res.status(401).json({ error: 'User not authenticated' });
+    }
+
+    if (!roles.includes(req.user.role)) {
+      return res.status(403).json({ error: 'Insufficient permissions' });
+    }
+
+    next();
+  };
+};
+
+// Error handling middleware
+const handleErrors = (err, req, res, next) => {
+  console.error('Error:', err);
+  
+  if (err.name === 'TypeError' && err.message.includes('path-to-regexp')) {
+    return res.status(400).json({ error: 'Invalid route parameter' });
+  }
+
+  if (err.code === 'auth/id-token-expired') {
+    return res.status(401).json({ error: 'Token expired' });
+  }
+
+  if (err.code === 'auth/invalid-token') {
+    return res.status(401).json({ error: 'Invalid token' });
+  }
+
+  res.status(500).json({ error: 'Internal server error' });
+};
+
+module.exports = { authenticateUser, requireRole, handleErrors };

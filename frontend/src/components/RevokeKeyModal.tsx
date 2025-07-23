@@ -1,19 +1,14 @@
-import React, { useState } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import React from 'react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Check, ChevronsUpDown } from 'lucide-react';
+import { Key, Users } from 'lucide-react';
 import { cn } from '@/lib/utils';
-
-interface User {
-  _id: string;
-  name: string;
-  receiptId?: string;
-}
+import { Badge } from '@/components/ui/badge';
 
 interface RevokeKeyModalProps {
   isOpen: boolean;
@@ -21,7 +16,18 @@ interface RevokeKeyModalProps {
   onRevoke: (userId: string, count: number, reason: string) => void;
   onUserSelect: (userId: string) => void;
   selectedUserKeysCount: number | null;
-  users: User[]; // Add users prop
+  users: Array<{
+    id: string;
+    name: string;
+    email: string;
+    keyCount?: number;
+    role?: string;
+    parent?: {
+      id: string;
+      name: string;
+      role: string;
+    } | null;
+  }>;
 }
 
 export const RevokeKeyModal: React.FC<RevokeKeyModalProps> = ({
@@ -30,140 +36,163 @@ export const RevokeKeyModal: React.FC<RevokeKeyModalProps> = ({
   onRevoke,
   onUserSelect,
   selectedUserKeysCount,
-  users, // Destructure users prop
+  users,
 }) => {
-  const [userId, setUserId] = useState('');
-  const [count, setCount] = useState<number>(1);
-  const [reason, setReason] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [open, setOpen] = useState(false); // For popover state
-  const [value, setValue] = useState(''); // For command input value
+  const [selectedUserId, setSelectedUserId] = React.useState<string>('');
+  const [count, setCount] = React.useState<number>(1);
+  const [reason, setReason] = React.useState<string>('');
 
   React.useEffect(() => {
-    if (userId) {
-      onUserSelect(userId);
+    if (!isOpen) {
+      // Reset form when modal closes
+      setSelectedUserId('');
+      setCount(1);
+      setReason('');
     }
-  }, [userId, onUserSelect]);
+  }, [isOpen]);
 
-  const handleRevoke = async () => {
-    if (!userId || count <= 0) {
-      toast.error('Please select a user and enter a positive count.');
+  const handleUserSelect = (userId: string) => {
+    console.log('User selected:', userId);
+    setSelectedUserId(userId);
+    onUserSelect(userId);
+    // Reset count when user changes
+    setCount(1);
+  };
+
+  const handleRevoke = () => {
+    if (!selectedUserId) {
+      toast.error('Please select a user');
+      return;
+    }
+    if (!count || count < 1) {
+      toast.error('Please enter a valid number of keys to revoke');
+      return;
+    }
+    if (count > (selectedUserKeysCount || 0)) {
+      toast.error(`User only has ${selectedUserKeysCount} keys available`);
+      return;
+    }
+    if (!reason.trim()) {
+      toast.error('Please provide a reason for revoking the keys');
       return;
     }
 
-    setIsLoading(true);
-    try {
-      await onRevoke(userId, count, reason);
-      toast.success('Keys revoked successfully!');
-      onClose();
-      setUserId('');
-      setCount(1);
-      setReason('');
-      setValue(''); // Clear selected user in dropdown
-    } catch (error) {
-      console.error('Failed to revoke keys:', error);
-      toast.error('Failed to revoke keys.');
-    } finally {
-      setIsLoading(false);
-    }
+    onRevoke(selectedUserId, count, reason);
+  };
+
+  // Helper function to get role display name
+  const getRoleDisplay = (role: string) => {
+    const roleMap: Record<string, string> = {
+      'super_distributor': 'Super Distributor',
+      'distributor': 'Distributor',
+      'retailer': 'Retailer',
+      'end_user': 'End User'
+    };
+    return roleMap[role] || role;
   };
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[425px]">
+      <DialogContent className="sm:max-w-[425px] bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-lg">
         <DialogHeader>
-          <DialogTitle>Revoke Keys</DialogTitle>
+          <DialogTitle className="text-xl font-semibold text-gray-900 dark:text-gray-100">Revoke Keys</DialogTitle>
         </DialogHeader>
-        <div className="grid gap-4 py-4">
-          <div className="grid grid-cols-4 items-center gap-4">
-            <Label htmlFor="userId" className="text-right">
-              User
+        <div className="space-y-6 py-4">
+          <div className="space-y-2">
+            <Label htmlFor="user-select" className="text-sm font-medium text-gray-700 dark:text-gray-200">
+              Select User
             </Label>
-            <Popover open={open} onOpenChange={setOpen}>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  role="combobox"
-                  aria-expanded={open}
-                  className="w-full justify-between col-span-3"
-                >
-                  {value
-                    ? users.find((user) => user._id === value)?.name
-                    : "Select user..."}
-                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
-                <Command>
-                  <CommandInput placeholder="Search user..." />
-                  <CommandEmpty>No user found.</CommandEmpty>
-                  <CommandList>
-                    <CommandGroup>
-                      {users.map((user) => (
-                        <CommandItem
-                          key={user._id}
-                          value={user._id}
-                          onSelect={(currentValue) => {
-                            setValue(currentValue === value ? '' : currentValue);
-                            setUserId(currentValue);
-                            setOpen(false);
-                          }}
-                        >
-                          <Check
-                            className={cn(
-                              'mr-2 h-4 w-4',
-                              value === user._id ? 'opacity-100' : 'opacity-0'
-                            )}
-                          />
-                          {user.name} {user.receiptId && `(${user.receiptId})`}
-                        </CommandItem>
-                      ))}
-                    </CommandGroup>
-                  </CommandList>
-                </Command>
-              </PopoverContent>
-            </Popover>
+            <Select value={selectedUserId} onValueChange={handleUserSelect}>
+              <SelectTrigger id="user-select" className="w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600">
+                <SelectValue placeholder="Select a user" />
+              </SelectTrigger>
+              <SelectContent>
+                {users.map(user => (
+                  <SelectItem key={user.id} value={user.id}>
+                    <div className="flex flex-col">
+                      <div className="flex items-center space-x-2">
+                        <span className="font-medium">{user.name}</span>
+                        <Badge variant="outline" className={cn(
+                          "ml-2 text-xs",
+                          user.role === 'super_distributor' && "bg-sky-50 text-sky-700 border-sky-200",
+                          user.role === 'distributor' && "bg-emerald-50 text-emerald-700 border-emerald-200",
+                          user.role === 'retailer' && "bg-amber-50 text-amber-700 border-amber-200"
+                        )}>
+                          {getRoleDisplay(user.role)}
+                        </Badge>
+                      </div>
+                      {user.parent && (
+                        <div className="text-sm text-gray-500 dark:text-gray-400">
+                          Parent: {user.parent.name} ({getRoleDisplay(user.parent.role)})
+                        </div>
+                      )}
+                      <div className="text-sm text-gray-500 dark:text-gray-400">
+                        {user.email} • {user.keyCount || 0} key(s)
+                      </div>
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
-          {selectedUserKeysCount !== null && (
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label className="text-right">Available Keys</Label>
-              <span className="col-span-3 text-sm font-medium">{selectedUserKeysCount}</span>
-            </div>
-          )}
-          <div className="grid grid-cols-4 items-center gap-4">
-            <Label htmlFor="count" className="text-right">
-              Count
+
+          <div className="space-y-2">
+            <Label htmlFor="count" className="text-sm font-medium text-gray-700 dark:text-gray-200">
+              Number of Keys to Revoke
             </Label>
             <Input
               id="count"
               type="number"
-              value={count}
-              onChange={(e) => setCount(Number(e.target.value))}
-              className="col-span-3"
               min={1}
+              max={selectedUserKeysCount || 1}
+              value={count}
+              onChange={(e) => {
+                const value = parseInt(e.target.value) || 1;
+                setCount(Math.min(value, selectedUserKeysCount || 1));
+              }}
+              className="w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600"
+              placeholder="Enter number of keys"
             />
+            {selectedUserKeysCount !== null && (
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                User has {selectedUserKeysCount} active key(s)
+              </p>
+            )}
           </div>
-          <div className="grid grid-cols-4 items-center gap-4">
-            <Label htmlFor="reason" className="text-right">
-              Reason
+
+          <div className="space-y-2">
+            <Label htmlFor="reason" className="text-sm font-medium text-gray-700 dark:text-gray-200">
+              Reason for Revocation
             </Label>
-            <Input
+            <Textarea
               id="reason"
               value={reason}
               onChange={(e) => setReason(e.target.value)}
-              className="col-span-3"
-              placeholder="Reason for revocation (optional)"
+              className="w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600"
+              placeholder="Enter reason for revoking keys"
+              rows={3}
             />
           </div>
+
+          <div className="flex justify-end space-x-2 pt-4">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={onClose}
+              className="px-4 py-2"
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={handleRevoke}
+              className="px-4 py-2"
+            >
+              Revoke Keys
+            </Button>
+          </div>
         </div>
-        <DialogFooter>
-          <Button onClick={onClose} variant="outline">
-            Cancel
-          </Button>
-          <Button onClick={handleRevoke} disabled={isLoading}>
-            {isLoading ? 'Revoking...' : 'Revoke Keys'}
-          </Button>
-        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

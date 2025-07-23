@@ -61,7 +61,11 @@ export const AuthProvider = ({ children }) => {
   const login = async (email, password) => {
     setLoading(true);
     try {
-      const userCredential = await auth.signInWithEmailAndPassword(email, password);
+      const userCredential = await auth.signInWithEmailAndPassword(email, password)
+        .catch(error => {
+          console.error('Firebase auth error:', error);
+          throw error;
+        });
       const idToken = await userCredential.user.getIdToken();
       console.log('AuthContext: idToken generated:', idToken);
 
@@ -76,8 +80,9 @@ export const AuthProvider = ({ children }) => {
       });
 
       const sessionLoginData = await sessionLoginResponse.json();
-      if (!sessionLoginResponse.ok || !sessionLoginData.success) {
-        throw new Error(sessionLoginData.error || 'Failed to establish session on backend');
+      if (!sessionLoginResponse.ok) {
+        const errorData = await sessionLoginResponse.json();
+        throw new Error(errorData.message || 'Authentication failed');
       }
 
       // After successful session establishment, fetch user data
@@ -97,8 +102,9 @@ export const AuthProvider = ({ children }) => {
         throw new Error(userData.error || 'Failed to fetch user data after session login');
       }
     } catch (error) {
-      console.error('Login error:', error);
-      throw error;
+      const message = error.response?.data?.message || error.message || 'Invalid email or password';
+      console.error('Login error:', message);
+      throw new Error(message);
     } finally {
       setLoading(false);
     }

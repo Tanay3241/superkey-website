@@ -7,4 +7,4 @@ router.post('/tutorials/upload', authenticateUser, requireRole(['super_admin']),
 
 router.get('/tutorials/all', fetchTutorials);
 
-module.exports = { router };
+module.exports = router;

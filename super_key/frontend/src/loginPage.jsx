@@ -9,48 +9,45 @@ const LoginPage = () => {
   const [error, setError] = useState("");
   const { login, loading: authLoading } = useAuth();
 
+  // Add error state logging
   const handleLogin = async (e) => {
     e.preventDefault();
-    setError("");
+    console.log('Login attempt started');
+    setError('');
     try {
       await login(email, password);
-      alert("Login successful!");
-      navigate('/currentUser');
+      console.log('Login succeeded, navigating');
     } catch (err) {
-      setError(err.message);
+      console.error('Login error caught:', err);
+      setError('Incorrect email ID or password. Please try again.');
     }
   };
-
-  return (
-    <div>
-      <h2>Login</h2>
-      <form onSubmit={handleLogin}>
-        <div>
-          <label>Email:</label>
-          <input
-            type="email"
-            value={email}
-            onChange={e => setEmail(e.target.value)}
-            required
-            autoFocus
-          />
-        </div>
-        <div>
-          <label>Password:</label>
-          <input
-            type="password"
-            value={password}
-            onChange={e => setPassword(e.target.value)}
-            required
-          />
-        </div>
-        {error && <div className="error-message">{error}</div>}
-        <button type="submit" disabled={authLoading}>
-          {authLoading ? "Logging in..." : "Login"}
-        </button>
-      </form>
+  
+  // Ensure error container has test ID
+  {error && 
+    <div data-testid="error-message" className="error-message">
+      {error}
     </div>
-  );
+  }
+  <div>
+    <h2>Login</h2>
+    // In your form element, ensure it's properly structured:
+    <form onSubmit={handleLogin}>
+      {/* Input fields */}
+      {error && 
+        <div className="error-message" style={{
+          color: 'red',
+          padding: '8px',
+          backgroundColor: '#ffeeee',
+          borderRadius: '4px',
+          margin: '10px 0'
+        }}>
+          {error}
+        </div>
+      }
+    </form>
+  </div>
+);
 };
 
 export default LoginPage;

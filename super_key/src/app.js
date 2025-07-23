@@ -1,94 +1,121 @@
+require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
-const helmet = require('helmet');
-require('dotenv').config({ path: require('path').resolve(__dirname, '../.env') });
-const cookieParser = require('cookie-parser');
-const session = require('express-session');
-const MongoDBStore = require('connect-mongodb-session')(session);
+const session = require('express-session'); // Add this
+const cookieParser = require('cookie-parser'); // Add this
+const { db, admin } = require('./config/firebase');
+const { authenticateUser } = require('./middleware/authMiddleware');
 
 const app = express();
 
-// Middleware
-app.use(helmet());
-app.use((req, res, next) => {
-  console.log(`App: Request received: ${req.method} ${req.url}`);
-  next();
-});
-app.use(cookieParser());
-const store = new MongoDBStore({
-  uri: process.env.MONGODB_URI,
-  collection: 'sessions'
-});
+// Detailed CORS configuration
+const corsOptions = {
+  origin: ['http://localhost:3001', 'http://localhost:3000', 'http://localhost:5173'],
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Origin', 'Accept'],
+  optionsSuccessStatus: 200
+};
 
-// Catch errors
-store.on('error', function(error) {
-  console.error('MongoDB Session Store Error:', error);
-});
+app.use(cors(corsOptions));
+app.use(express.json());
+app.use(cookieParser()); // Add this
 
-store.on('connected', function() {
-  console.log('MongoDB Session Store Connected!');
-
-});
-
-store.on('disconnected', function() {
-  console.warn('MongoDB Session Store Disconnected!');
-});
-
-app.use(cors({
-  origin: 'http://localhost:5173',
-  credentials: true
-}));
-
+// Add session management
 app.use(session({
-  secret: process.env.SESSION_SECRET,
+  secret: process.env.SESSION_SECRET || 'superkey-session-secret',
   resave: false,
-  saveUninitialized: true,
-  store: store,
-  cookie: {
-    maxAge: 1000 * 60 * 60 * 24 * 7, // 1 week
-    secure: false, // Set to true in production with HTTPS
+  saveUninitialized: false,
+  cookie: { 
+    secure: process.env.NODE_ENV === 'production', // Use secure cookies in production
     httpOnly: true,
-    sameSite: 'None', // Required for cross-site cookies
+    maxAge: 24 * 60 * 60 * 1000 // 24 hours
   }
 }));
 
+// Add detailed request logging
+app.use((req, res, next) => {
+  console.log(`[${new Date().toISOString()}]`);
+  console.log(`Method: ${req.method}`);
+  console.log(`URL: ${req.url}`);
+  console.log(`Headers:`, req.headers);
+  next();
+});
 
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+// CORS preflight handling
+app.options('*', cors(corsOptions));
 
+// Test route with error handling
+app.get('/api/test', async (req, res) => {
+  try {
+    await db.collection('users').limit(1).get();
+    res.json({ 
+      status: 'ok',
+      message: 'Server and Firebase connected',
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Test route error:', error);
+    res.status(500).json({ 
+      error: 'Server test failed',
+      details: error.message 
+    });
+  }
+});
 
+// API Routes with error wrapping
+const authRouter = require('./routes/auth');
+const usersRouter = require('./routes/users');
+const keysRouter = require('./routes/keys');
 
-// Routes
-app.use('/api/auth', require('./routes/auth').router);
-app.use('/api/users', require('./routes/users').router);
-app.use('/api/endusers', require('./routes/endUsers').router);
-app.use('/api/keys', require('./routes/keys').router);
-app.use('/api/emi', require('./routes/emi').router);
-app.use('/api/support/', require('./routes/support').router);
-app.use('/setup', require('./routes/setup').router);
+app.use('/api/auth', (req, res, next) => {
+  console.log('Auth request received:', req.path);
+  return authRouter(req, res, next);
+});
 
-// Error handling middleware
+// Apply authentication middleware to users and keys routes
+app.use('/api/users', authenticateUser, usersRouter);
+app.use('/api/keys', authenticateUser, keysRouter);
+
+// Enhanced error handling
 app.use((err, req, res, next) => {
-  console.error(err.stack);
-  res.status(500).json({ error: 'Something went wrong!' });
+  console.error('Server error:', {
+    message: err.message,
+    stack: err.stack,
+    path: req.path
+  });
+  
+  res.status(err.status || 500).json({ 
+    error: err.message || 'Internal server error',
+    path: req.path,
+    timestamp: new Date().toISOString()
+  });
 });
 
-console.log('Attempting to start server...');
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
+
+// Start server with connection validation
+const server = app.listen(PORT, '0.0.0.0', () => {
+  console.log('='.repeat(50));
   console.log(`Server running on port ${PORT}`);
-});
-
-process.on('uncaughtException', (err) => {
-  console.error('UNCAUGHT EXCEPTION! Shutting down...');
-  console.error(err);
+  console.log(`Frontend URL: http://localhost:3001`);
+  console.log(`API URL: http://localhost:${PORT}/api`);
+  console.log('='.repeat(50));
+}).on('error', (error) => {
+  if (error.code === 'EADDRINUSE') {
+    console.error(`Port ${PORT} is already in use`);
+  } else {
+    console.error('Server failed to start:', error);
+  }
   process.exit(1);
 });
 
-process.on('unhandledRejection', (err) => {
-  console.error('UNHANDLED REJECTION! Shutting down...');
-  console.error(err);
-  process.exit(1);
+// Handle process termination
+process.on('SIGTERM', () => {
+  server.close(() => {
+    console.log('Server shutdown complete');
+    process.exit(0);
+  });
 });
 
 module.exports = app;

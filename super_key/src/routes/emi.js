@@ -7,4 +7,4 @@ router.post('/pay', authenticateUser, requireRole(['retailer']), payEMI);
 
 router.get('/logs/:endUserId', authenticateUser, requireRole(['retailer']), fetchEmiLogs);
 
-module.exports = { router };
+module.exports = router;
