@@ -1,10 +1,7 @@
 const { admin } = require('../config/firebase');
 
 const authenticateUser = async (req, res, next) => {
-  // Add CORS headers
-  res.header('Access-Control-Allow-Origin', 'http://localhost:5173'); // Or whatever your frontend's actual port is
-  res.header('Access-Control-Allow-Credentials', 'true');
-  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+  // Removed manual CORS headers to avoid conflicts
 
   // Handle preflight requests
   if (req.method === 'OPTIONS') {

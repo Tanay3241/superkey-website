@@ -131,22 +131,15 @@ export const usersApi = {
 
 // Keys API
 export const keysApi = {
-  create: (count: number, validityInMonths: number) => 
-    api.post('/api/keys/generate', { count, validityInMonths }),
-  
-  getAll: () => api.get('/api/keys'),
-  
-  revoke: (userId: string, count: number, reason?: string) => 
-    api.post('/api/keys/revoke', { userId, count, reason }),
-  
-  transfer: (toUserId: string, count: number) => 
-    api.post('/api/keys/transfer', { toUserId, count }),
-
-  getUserKeys: (userId: string) => 
-    api.get(`/api/keys/user/${userId}`),
-  
+  create: (count: number) => api.post('/api/keys/generate', { count }),
+  getAll: async () => {
+    const response = await api.get('/api/keys');
+    return { ...response, data: response.data.keys };
+  },
+  revoke: (keyId: string) => api.post('/api/keys/revoke', { keyId }),
+  transfer: (recipientId: string, count: number) => api.post('/api/keys/transfer', { recipientId, count }),
+  getUserKeys: (userId: string) => api.get(`/api/keys/user/${userId}`),
   getHistory: (keyId: string) => api.get(`/api/keys/${keyId}/history`),
-
   getTransactions: (cursor?: string | null, pageSize: number = 10) => 
     api.get('/api/keys/transactions', { 
       params: { 

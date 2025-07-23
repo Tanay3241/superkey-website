@@ -3,6 +3,7 @@ import { authApi } from '@/lib/api';
 import { toast } from 'sonner';
 import { auth } from '@/lib/firebase'; // Import the auth instance
 import { signInWithEmailAndPassword } from 'firebase/auth'; // Import signInWithEmailAndPassword
+import { onAuthStateChanged } from 'firebase/auth';
 
 interface User {
   uid: string;
@@ -58,37 +59,29 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   useEffect(() => {
-    const initializeAuth = async () => {
-      console.log('AuthContext: initializeAuth started'); // Add this log
-      try {
-        // Check session status with backend
-        console.log('AuthContext: Calling authApi.checkSession()'); // Add this log
-        const response = await authApi.checkSession();
-        console.log('AuthContext: authApi.checkSession() response', response); // Add this log
-        if (response.data.success) {
-          setUser({
-            ...response.data.user,
-            wallet: response.data.user.wallet || {
-              availableKeys: 0,
-              totalKeysReceived: 0,
-              totalKeysTransferred: 0,
-              totalProvisioned: 0,
-              totalRevoked: 0
-            }
-          });
+    // Wait for Firebase Auth to initialize before making API calls
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (firebaseUser) {
+        // User is signed in, get ID token and refresh user from backend
+        setIsLoading(true);
+        try {
+          const idToken = await firebaseUser.getIdToken();
+          // Optionally, you can call your backend to refresh user/session here
+          await refreshUser();
           setIsAuthenticated(true);
+        } catch (error) {
+          setUser(null);
+          setIsAuthenticated(false);
+        } finally {
+          setIsLoading(false);
         }
-      } catch (error) {
-        console.error('Auth initialization error:', error);
+      } else {
         setUser(null);
         setIsAuthenticated(false);
-      } finally {
-        console.log('AuthContext: initializeAuth finished'); // Add this log
         setIsLoading(false);
       }
-    };
-
-    initializeAuth();
+    });
+    return () => unsubscribe();
   }, []);
 
   const login = async (email: string, password: string) => {

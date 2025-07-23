@@ -68,7 +68,8 @@ router.get('/wallet',
 
 router.get('/recipients', authenticateUser, async (req, res) => { // Changed 'auth' to 'authenticateUser'
   try {
-    const snapshot = await db.collection('users').where('role', '==', 'endUser').get();
+    const allowedRoles = ['super_distributor', 'distributor', 'retailer', 'endUser'];
+    const snapshot = await db.collection('users').where('role', 'in', allowedRoles).get();
     const recipients = snapshot.docs.map(doc => ({
       _id: doc.id, // Map doc.id to _id
       username: doc.data().name || doc.data().email, // Use name or email as username

@@ -37,6 +37,7 @@ import {
 import { Check, ChevronsUpDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+import { keysApi } from '@/lib/api';
 
 // Define types for our data
 interface Key {
@@ -68,35 +69,31 @@ const Keys: React.FC = () => {
   const [keyToRevoke, setKeyToRevoke] = useState<Key | null>(null);
   const [isRevokeModalOpen, setRevokeModalOpen] = useState(false);
   const [popoverOpen, setPopoverOpen] = useState(false);
+  const [validityInMonths, setValidityInMonths] = useState(12);
+  const [revokeUser, setRevokeUser] = useState<User | null>(null);
+  const [revokeCount, setRevokeCount] = useState(1);
+  const [revokeReason, setRevokeReason] = useState('');
 
   const API_URL = import.meta.env.VITE_API_URL;
 
   const fetchKeys = useCallback(async () => {
     if (!user) return;
     try {
-      const response = await fetch(`${API_URL}/api/keys`, {
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem('token')}`,
-        },
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setKeys(data);
-      } else {
-        console.error('Failed to fetch keys');
-        toast.error('Failed to fetch keys.');
-      }
+      const response = await keysApi.getAll();
+      const data = Array.isArray(response.data) ? response.data : [];
+      setKeys(data);
     } catch (error) {
-      console.error('Error fetching keys:', error);
-      toast.error('An error occurred while fetching keys.');
+      console.error('Failed to fetch keys:', error);
+      toast.error('Failed to fetch keys.');
+      setKeys([]);
     }
-  }, [user, API_URL]);
+  }, [user]);
 
   const fetchRecipients = useCallback(async () => {
     if (!user) return;
     let url = `${API_URL}/api/users/recipients`;
 
-    if (user?.role === 'superadmin') {
+    if (user?.role === 'super_admin') {
       url = `${API_URL}/api/users/all`;
     }
 
@@ -130,28 +127,11 @@ const Keys: React.FC = () => {
     if (!user) return;
 
     try {
-      const response = await fetch(`${API_URL}/keys/create`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${localStorage.getItem('token')}`,
-        },
-        body: JSON.stringify({ numberOfKeys, owner: user._id }),
-      });
-
-      if (response.ok) {
-        const newKeys = await response.json();
-        setKeys((prevKeys) => [...prevKeys, ...newKeys]);
-        toast.success(`${numberOfKeys} key(s) created successfully!`);
-        fetchKeys(); // Refresh the key list
-      } else {
-        const errorData = await response.json();
-        console.error('Failed to create keys:', errorData.message);
-        toast.error(`Failed to create keys: ${errorData.message}`);
-      }
-    } catch (error) {
-      console.error('Error creating keys:', error);
-      toast.error('An error occurred while creating keys.');
+      await keysApi.create(numberOfKeys, validityInMonths);
+      toast.success(`${numberOfKeys} key(s) created successfully!`);
+      fetchKeys(); // Refresh the key list
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to create keys');
     }
   };
 
@@ -162,31 +142,13 @@ const Keys: React.FC = () => {
     }
 
     try {
-      const response = await fetch(`${API_URL}/keys/transfer`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${localStorage.getItem('token')}`,
-        },
-        body: JSON.stringify({
-          recipientId: selectedRecipient._id,
-          numberOfKeys,
-        }),
-      });
-
-      const result = await response.json();
-
-      if (response.ok) {
-        toast.success(result.message);
-        fetchKeys();
-        setSelectedRecipient(null);
-        setNumberOfKeys(1);
-      } else {
-        toast.error(result.message);
-      }
-    } catch (error) {
-      console.error('Failed to transfer keys:', error);
-      toast.error('An error occurred during key transfer.');
+      await keysApi.transfer(selectedRecipient._id, numberOfKeys);
+      toast.success('Keys transferred successfully!');
+      fetchKeys();
+      setSelectedRecipient(null);
+      setNumberOfKeys(1);
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to transfer keys');
     }
   };
 
@@ -199,25 +161,13 @@ const Keys: React.FC = () => {
     if (!keyToRevoke) return;
 
     try {
-      const response = await fetch(`${API_URL}/keys/revoke/${keyToRevoke._id}`, {
-        method: 'PUT',
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem('token')}`,
-        },
-      });
-
-      if (response.ok) {
-        toast.success('Key revoked successfully!');
-        setKeyToRevoke(null);
-        setRevokeModalOpen(false);
-        fetchKeys(); // Refresh keys
-      } else {
-        const errorData = await response.json();
-        toast.error(`Failed to revoke key: ${errorData.message}`);
-      }
-    } catch (error) {
-      console.error('Error revoking key:', error);
-      toast.error('An error occurred while revoking the key.');
+      await keysApi.revoke(keyToRevoke._id, 1, 'Revoked from UI');
+      toast.success('Key revoked successfully!');
+      setKeyToRevoke(null);
+      setRevokeModalOpen(false);
+      fetchKeys(); // Refresh keys
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to revoke key');
     }
   };
 
@@ -252,19 +202,19 @@ const Keys: React.FC = () => {
                     <TableHead>Status</TableHead>
                     <TableHead>Is Used</TableHead>
                     <TableHead>Created At</TableHead>
-                    {(user?.role === 'superadmin' || user?.role === 'distributor') && (
+                    {(user?.role === 'super_admin' || user?.role === 'distributor') && (
                       <TableHead className="text-right">Actions</TableHead>
                     )}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {keys.map((key) => (
+                  {Array.isArray(keys) && keys.map((key) => (
                     <TableRow key={key._id}>
                       <TableCell>{key.keyCode}</TableCell>
                       <TableCell>{key.status}</TableCell>
                       <TableCell>{key.isUsed ? 'Yes' : 'No'}</TableCell>
                       <TableCell>{new Date(key.createdAt).toLocaleDateString()}</TableCell>
-                      {(user?.role === 'superadmin' || user?.role === 'distributor') && (
+                      {(user?.role === 'super_admin' || user?.role === 'distributor') && (
                         <TableCell className="text-right">
                           {key.status !== 'revoked' && (
                             <Button variant="destructive" size="sm" onClick={() => handleRevokeClick(key)}>
@@ -282,7 +232,7 @@ const Keys: React.FC = () => {
         </TabsContent>
 
         {/* Create Keys Tab */}
-        {(user?.role === 'superadmin' || user?.role === 'distributor') && (
+        {(user?.role === 'super_admin' || user?.role === 'distributor') && (
           <TabsContent value="create-keys">
             <Card>
               <CardHeader>
@@ -300,6 +250,16 @@ const Keys: React.FC = () => {
                       min="1"
                     />
                   </div>
+                  <div>
+                    <Label htmlFor="validityInMonths">Validity (months)</Label>
+                    <Input
+                      id="validityInMonths"
+                      type="number"
+                      value={validityInMonths}
+                      onChange={(e) => setValidityInMonths(parseInt(e.target.value, 10))}
+                      min="1"
+                    />
+                  </div>
                   <Button onClick={handleCreateKeys}>Create Keys</Button>
                 </div>
               </CardContent>
@@ -308,7 +268,7 @@ const Keys: React.FC = () => {
         )}
 
         {/* Transfer Keys Tab */}
-        {(user?.role === 'superadmin' || user?.role === 'distributor') && (
+        {(user?.role === 'super_admin' || user?.role === 'distributor') && (
           <TabsContent value="transfer-keys">
             <Card>
               <CardHeader>
@@ -326,7 +286,7 @@ const Keys: React.FC = () => {
                           aria-expanded={popoverOpen}
                           className="w-full justify-between"
                         >
-                          {selectedRecipient ? selectedRecipient.username : 'Select a recipient...'}
+                          {selectedRecipient ? `${selectedRecipient.username} (${selectedRecipient.role})` : 'Select a recipient...'}
                           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                         </Button>
                       </PopoverTrigger>
@@ -351,7 +311,7 @@ const Keys: React.FC = () => {
                                       selectedRecipient?._id === recipient._id ? 'opacity-100' : 'opacity-0'
                                     )}
                                   />
-                                  {recipient.username}
+                                  {recipient.username} ({recipient.role})
                                 </CommandItem>
                               ))}
                             </CommandGroup>
@@ -371,6 +331,105 @@ const Keys: React.FC = () => {
                     />
                   </div>
                   <Button onClick={handleTransfer}>Transfer Keys</Button>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        )}
+
+        {/* Revoke Keys Tab */}
+        {(user?.role === 'super_admin') && (
+          <TabsContent value="revoke-keys">
+            <Card>
+              <CardHeader>
+                <CardTitle>Revoke Keys</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4 max-w-sm">
+                  <div>
+                    <Label>Select User</Label>
+                    <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          role="combobox"
+                          aria-expanded={popoverOpen}
+                          className="w-full justify-between"
+                        >
+                          {revokeUser ? `${revokeUser.username} (${revokeUser.role})` : 'Select a user...'}
+                          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
+                        <Command>
+                          <CommandInput placeholder="Search user..." />
+                          <CommandList>
+                            <CommandEmpty>No users found.</CommandEmpty>
+                            <CommandGroup>
+                              {recipients.map((recipient) => (
+                                <CommandItem
+                                  key={recipient._id}
+                                  value={recipient.username}
+                                  onSelect={() => {
+                                    setRevokeUser(recipient);
+                                    setPopoverOpen(false);
+                                  }}
+                                >
+                                  <Check
+                                    className={cn(
+                                      'mr-2 h-4 w-4',
+                                      revokeUser?._id === recipient._id ? 'opacity-100' : 'opacity-0'
+                                    )}
+                                  />
+                                  {recipient.username} ({recipient.role})
+                                </CommandItem>
+                              ))}
+                            </CommandGroup>
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+                  <div>
+                    <Label htmlFor="revokeCount">Number of Keys to Revoke</Label>
+                    <Input
+                      id="revokeCount"
+                      type="number"
+                      value={revokeCount}
+                      onChange={(e) => setRevokeCount(parseInt(e.target.value, 10))}
+                      min="1"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="revokeReason">Reason for Revocation</Label>
+                    <Input
+                      id="revokeReason"
+                      type="text"
+                      value={revokeReason}
+                      onChange={(e) => setRevokeReason(e.target.value)}
+                    />
+                  </div>
+                  <Button
+                    variant="destructive"
+                    onClick={async () => {
+                      if (!revokeUser) {
+                        toast.error('Please select a user');
+                        return;
+                      }
+                      try {
+                        await keysApi.revoke(revokeUser._id, revokeCount, revokeReason);
+                        toast.success('Keys revoked successfully!');
+                        setRevokeUser(null);
+                        setRevokeCount(1);
+                        setRevokeReason('');
+                        fetchKeys();
+                      } catch (error: any) {
+                        toast.error(error.message || 'An error occurred while revoking keys.');
+                      }
+                    }}
+                  >
+                    Revoke Keys
+                  </Button>
                 </div>
               </CardContent>
             </Card>
