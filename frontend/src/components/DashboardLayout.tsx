@@ -1,5 +1,5 @@
 import React from 'react';
-import { Link } from 'react-router-dom';
+import { Link, Navigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import Sidebar from './Sidebar';
 import ProfileDropdown from './ProfileDropdown';
@@ -9,6 +9,13 @@ interface DashboardLayoutProps {
 }
 
 const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
+  const { isAuthenticated } = useAuth();
+  
+  // Redirect to login page if not authenticated
+  if (!isAuthenticated) {
+    return <Navigate to="/" replace />;
+  }
+  
   return (
     <div className="flex h-screen bg-gray-50 dark:bg-gray-900">
       <Sidebar />

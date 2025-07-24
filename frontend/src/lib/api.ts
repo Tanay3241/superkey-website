@@ -14,13 +14,23 @@ const api = axios.create({
 api.interceptors.request.use(async (config) => {
   try {
     const user = auth.currentUser;
-    console.log('Interceptor: auth.currentUser', user); // Add this log
     if (user) {
+      // Get token without forcing refresh every time
       const token = await user.getIdToken();
       config.headers.Authorization = `Bearer ${token}`;
-      console.log('Interceptor: Token added to headers', config.headers.Authorization); // Add this log
+      // Store token in localStorage as a backup
+      localStorage.setItem('authToken', token);
     } else {
-      console.log('Interceptor: No user found, no token added'); // Add this log
+      // Try to use token from localStorage if available
+      const cachedToken = localStorage.getItem('authToken');
+      if (cachedToken) {
+        config.headers.Authorization = `Bearer ${cachedToken}`;
+        // Try to refresh the session with the cached token
+        authApi.checkSession().catch(() => {
+          // If session check fails, clear the token
+          localStorage.removeItem('authToken');
+        });
+      }
     }
     return config;
   } catch (error) {
@@ -33,11 +43,13 @@ api.interceptors.request.use(async (config) => {
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    // Transform error messages to be more user-friendly
-    if (error.response?.data?.error) {
+    // Handle token expiration
+    if (error.response?.status === 401) {
+      // Clear cached token if it's invalid
+      localStorage.removeItem('authToken');
+      error.message = 'Your session has expired. Please log in again.';
+    } else if (error.response?.data?.error) {
       error.message = error.response.data.error;
-    } else if (error.response?.status === 401) {
-      error.message = 'Invalid email or password. Please try again.';
     } else if (error.response?.status === 403) {
       error.message = 'You do not have permission to perform this action.';
     } else if (error.message.includes('Network Error')) {
@@ -131,13 +143,13 @@ export const usersApi = {
 
 // Keys API
 export const keysApi = {
-  create: (count: number) => api.post('/api/keys/generate', { count }),
+  create: (count: number, validityInMonths: number = 12) => api.post('/api/keys/generate', { count, validityInMonths }),
   getAll: async () => {
     const response = await api.get('/api/keys');
     return { ...response, data: response.data.keys };
   },
-  revoke: (keyId: string) => api.post('/api/keys/revoke', { keyId }),
-  transfer: (recipientId: string, count: number) => api.post('/api/keys/transfer', { recipientId, count }),
+  revoke: (keyId: string, count: number = 1, reason: string = '') => api.post('/api/keys/revoke', { userId: keyId, count, reason }),
+  transfer: (recipientId: string, count: number) => api.post('/api/keys/transfer', { toUserId: recipientId, count }),
   getUserKeys: (userId: string) => api.get(`/api/keys/user/${userId}`),
   getHistory: (keyId: string) => api.get(`/api/keys/${keyId}/history`),
   getTransactions: (cursor?: string | null, pageSize: number = 10) => 

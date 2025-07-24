@@ -2,6 +2,7 @@ import { useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import type { UserRole } from '@/contexts/AuthContext';
 import { AuthTabs } from './AuthTabs';
+import AuthLayout from './AuthLayout';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -26,11 +27,9 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   // If no user is logged in, show the auth tabs
   if (!user) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="w-full max-w-md">
-          <AuthTabs />
-        </div>
-      </div>
+      <AuthLayout>
+        <AuthTabs />
+      </AuthLayout>
     );
   }
 

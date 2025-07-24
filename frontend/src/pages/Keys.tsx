@@ -37,7 +37,8 @@ import {
 import { Check, ChevronsUpDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
-import { keysApi } from '@/lib/api';
+import { keysApi, usersApi } from '@/lib/api';
+import { auth } from '@/lib/firebase'; // Add this import
 
 // Define types for our data
 interface Key {
@@ -56,7 +57,8 @@ interface User {
 }
 
 const Keys: React.FC = () => {
-  const { user } = useAuth();
+  // At the top of the component, add:
+  const { user, refreshUser } = useAuth();
 
   useEffect(() => {
     console.log('User role in Keys.tsx:', user?.role);
@@ -74,8 +76,6 @@ const Keys: React.FC = () => {
   const [revokeCount, setRevokeCount] = useState(1);
   const [revokeReason, setRevokeReason] = useState('');
 
-  const API_URL = import.meta.env.VITE_API_URL;
-
   const fetchKeys = useCallback(async () => {
     if (!user) return;
     try {
@@ -91,31 +91,44 @@ const Keys: React.FC = () => {
 
   const fetchRecipients = useCallback(async () => {
     if (!user) return;
-    let url = `${API_URL}/api/users/recipients`;
-
-    if (user?.role === 'super_admin') {
-      url = `${API_URL}/api/users/all`;
-    }
-
     try {
-      const response = await fetch(url, {
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem('token')}`,
-        },
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setRecipients(data);
+      let response;
+      
+      // Use the proper API endpoint based on user role
+      if (user?.role === 'super_admin') {
+        // Use the usersApi.getAllUsers() for super_admin to get all users
+        response = await usersApi.getAllUsers();
+        if (response.data && response.data.users) {
+          // Map the response to match the expected format
+          const formattedUsers = response.data.users.map((u: any) => ({
+            _id: u.uid,
+            username: u.name || u.email,
+            role: u.role
+          }));
+          setRecipients(formattedUsers);
+        }
       } else {
-        console.error('Failed to fetch recipients');
-        toast.error('Failed to load users for key transfer.');
+        // For other roles, use the recipients endpoint with proper authentication
+        const token = await auth.currentUser?.getIdToken();
+        response = await fetch(`${import.meta.env.VITE_API_URL}/api/users/recipients`, {
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          setRecipients(data);
+        } else {
+          console.error('Failed to fetch recipients');
+          toast.error('Failed to load users for key transfer.');
+        }
       }
     } catch (error) {
       console.error('Error fetching recipients:', error);
       toast.error('An error occurred while fetching users.');
     }
-  }, [user, API_URL]);
+  }, [user]);
 
   useEffect(() => {
     console.log('Keys.tsx: Current user role:', user?.role);
@@ -130,6 +143,7 @@ const Keys: React.FC = () => {
       await keysApi.create(numberOfKeys, validityInMonths);
       toast.success(`${numberOfKeys} key(s) created successfully!`);
       fetchKeys(); // Refresh the key list
+      await refreshUser(); // Add this line to refresh user data including wallet
     } catch (error: any) {
       toast.error(error.message || 'Failed to create keys');
     }
@@ -145,6 +159,7 @@ const Keys: React.FC = () => {
       await keysApi.transfer(selectedRecipient._id, numberOfKeys);
       toast.success('Keys transferred successfully!');
       fetchKeys();
+      await refreshUser(); // Add this line
       setSelectedRecipient(null);
       setNumberOfKeys(1);
     } catch (error: any) {
@@ -166,6 +181,7 @@ const Keys: React.FC = () => {
       setKeyToRevoke(null);
       setRevokeModalOpen(false);
       fetchKeys(); // Refresh keys
+      await refreshUser(); // Add this line
     } catch (error: any) {
       toast.error(error.message || 'Failed to revoke key');
     }
@@ -193,6 +209,25 @@ const Keys: React.FC = () => {
           <Card>
             <CardHeader>
               <CardTitle>My Keys</CardTitle>
+              {user?.wallet && (
+                <div className="flex flex-wrap gap-4 mt-2">
+                  <div className="text-sm">
+                    <span className="font-semibold">Available Keys:</span> {user.wallet.availableKeys || 0}
+                  </div>
+                  <div className="text-sm">
+                    <span className="font-semibold">Total Received:</span> {user.wallet.totalKeysReceived || 0}
+                  </div>
+                  <div className="text-sm">
+                    <span className="font-semibold">Total Transferred:</span> {user.wallet.totalKeysTransferred || 0}
+                  </div>
+                  <div className="text-sm">
+                    <span className="font-semibold">Total Provisioned:</span> {user.wallet.totalProvisioned || 0}
+                  </div>
+                  <div className="text-sm">
+                    <span className="font-semibold">Total Revoked:</span> {user.wallet.totalRevoked || 0}
+                  </div>
+                </div>
+              )}
             </CardHeader>
             <CardContent>
               <Table>
@@ -423,6 +458,7 @@ const Keys: React.FC = () => {
                         setRevokeCount(1);
                         setRevokeReason('');
                         fetchKeys();
+                        await refreshUser(); // Add this line
                       } catch (error: any) {
                         toast.error(error.message || 'An error occurred while revoking keys.');
                       }

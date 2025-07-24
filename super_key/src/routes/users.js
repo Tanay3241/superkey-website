@@ -66,12 +66,14 @@ router.get('/wallet',
   }
 );
 
-router.get('/recipients', authenticateUser, async (req, res) => { // Changed 'auth' to 'authenticateUser'
+router.get('/recipients', authenticateUser, async (req, res) => {
   try {
+    // Include all roles that can receive keys
     const allowedRoles = ['super_distributor', 'distributor', 'retailer', 'endUser'];
     const snapshot = await db.collection('users').where('role', 'in', allowedRoles).get();
     const recipients = snapshot.docs.map(doc => ({
       _id: doc.id, // Map doc.id to _id
+      uid: doc.id, // Also include uid for compatibility
       username: doc.data().name || doc.data().email, // Use name or email as username
       role: doc.data().role, // Explicitly include the role
       ...doc.data()
@@ -79,6 +81,26 @@ router.get('/recipients', authenticateUser, async (req, res) => { // Changed 'au
     res.status(200).json(recipients);
   } catch (error) {
     console.error(error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Get all users for admin operations (no role filtering)
+router.get('/all', authenticateUser, requireRole(['super_admin']), async (req, res) => {
+  try {
+    const snapshot = await db.collection('users').get();
+    const users = snapshot.docs.map(doc => ({
+      uid: doc.id, // Map doc.id to uid to match frontend expectations
+      _id: doc.id, // Also include _id for compatibility
+      name: doc.data().name || doc.data().email,
+      username: doc.data().name || doc.data().email, // Include username for compatibility
+      email: doc.data().email,
+      role: doc.data().role,
+      ...doc.data()
+    }));
+    res.status(200).json({ success: true, users });
+  } catch (error) {
+    console.error('Error fetching all users:', error);
     res.status(500).json({ message: 'Server error' });
   }
 });

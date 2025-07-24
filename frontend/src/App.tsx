@@ -19,21 +19,16 @@ export default function App() {
         <Toaster richColors position="top-center" />
         <Routes>
           <Route path="/" element={<Index />} />
-          <Route path="/dashboard" element={
-            <DashboardLayout>
-              <Suspense
-                fallback={
-                  <div className="min-h-screen flex items-center justify-center bg-background">
-                    <div className="animate-spin h-12 w-12 border-4 border-foreground border-t-transparent rounded-full" />
-                  </div>
-                }
-              >
-                <ProtectedRoute>
+          <Route
+            path="/dashboard"
+            element={
+              <ProtectedRoute>
+                <DashboardLayout>
                   <Dashboard />
-                </ProtectedRoute>
-              </Suspense>
-            </DashboardLayout>
-          } />
+                </DashboardLayout>
+              </ProtectedRoute>
+            }
+          />
           <Route path="/users" element={
             <DashboardLayout>
               <Suspense

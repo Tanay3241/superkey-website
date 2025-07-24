@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import { AuthTabs } from '@/components/AuthTabs';
 import { Loader2 } from 'lucide-react';
 import { motion } from 'framer-motion';
+import AuthLayout from '@/components/AuthLayout';
 
 const Index = () => {
   const { isAuthenticated, isLoading } = useAuth();
@@ -32,9 +33,9 @@ const Index = () => {
   }
 
   return (
-    <div className="w-full">
+    <AuthLayout>
       <AuthTabs />
-    </div>
+    </AuthLayout>
   );
 };
 

@@ -65,20 +65,64 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         // User is signed in, get ID token and refresh user from backend
         setIsLoading(true);
         try {
-          const idToken = await firebaseUser.getIdToken();
-          // Optionally, you can call your backend to refresh user/session here
           await refreshUser();
           setIsAuthenticated(true);
+        } catch (error) {
+          console.error('Error refreshing user:', error);
+          // Don't immediately set user to null on error
+          // Try to check session first
+          try {
+            const response = await authApi.checkSession();
+            if (response.data?.user) {
+              setUser({
+                ...response.data.user,
+                wallet: response.data.user.wallet || {
+                  availableKeys: 0,
+                  totalKeysReceived: 0,
+                  totalKeysTransferred: 0,
+                  totalProvisioned: 0,
+                  totalRevoked: 0
+                }
+              });
+              setIsAuthenticated(true);
+            } else {
+              setUser(null);
+              setIsAuthenticated(false);
+            }
+          } catch (sessionError) {
+            setUser(null);
+            setIsAuthenticated(false);
+          }
+        } finally {
+          setIsLoading(false);
+        }
+      } else {
+        // Try to check session even if Firebase says no user
+        setIsLoading(true);
+        try {
+          const response = await authApi.checkSession();
+          if (response.data?.user) {
+            setUser({
+              ...response.data.user,
+              wallet: response.data.user.wallet || {
+                availableKeys: 0,
+                totalKeysReceived: 0,
+                totalKeysTransferred: 0,
+                totalProvisioned: 0,
+                totalRevoked: 0
+              }
+            });
+            setIsAuthenticated(true);
+          } else {
+            setUser(null);
+            setIsAuthenticated(false);
+          }
         } catch (error) {
           setUser(null);
           setIsAuthenticated(false);
         } finally {
           setIsLoading(false);
         }
-      } else {
-        setUser(null);
-        setIsAuthenticated(false);
-        setIsLoading(false);
       }
     });
     return () => unsubscribe();
